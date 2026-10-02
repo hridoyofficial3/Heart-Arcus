@@ -111,8 +111,8 @@ html[data-theme="dark"], html[data-theme="black"] select{
   html[data-theme="dark"], html[data-theme="black"] .account-row .ar-badge{ background:#333; color:#999; }
   html[data-theme="dark"], html[data-theme="black"] .catrow .bar{ background:#333; }
   html[data-theme="dark"], html[data-theme="black"] .progress-track{ background:#333; }
-  html[data-theme="dark"], html[data-theme="black"] .rh-chip.paid{ background:#1f3325; color:#4fa284; }
-  html[data-theme="dark"], html[data-theme="black"] .rh-chip.skipped{ background:#333; color:#999; }
+  html[data-theme="dark"]{ background:#1f3325; color:#4fa284; }
+  html[data-theme="dark"]{ background:#333; color:#999; }
   html[data-theme="dark"], html[data-theme="black"] .note-item .txt.done{ color:#666; }
   html[data-theme="dark"], html[data-theme="black"] .empty{ color:#666; }
   html[data-theme="dark"], html[data-theme="black"] .tabs::before{ background:var(--paper); }
@@ -141,7 +141,7 @@ html[data-theme="dark"], html[data-theme="black"] select{
   body{
     font-family:'Kohinoor Bangla','Noto Sans Bengali','Hind Siliguri','Inter', sans-serif;
     background-color:var(--paper);
-    background-image:linear-gradient(rgba(248,250,252,.55),rgba(248,250,252,.55)), url("bg-day.png");
+    background-image:linear-gradient(rgba(248,250,252,.55),rgba(248,250,252,.55)), url("backgrounds/day.jpg");
     background-size:cover;
     background-position:center;
     background-attachment:fixed;
@@ -151,7 +151,7 @@ html[data-theme="dark"], html[data-theme="black"] select{
     transition:background-color .25s, color .25s;
   }
   html[data-theme="dark"] body, html[data-theme="black"] body{
-    background-image:linear-gradient(rgba(11,18,32,.55),rgba(11,18,32,.55)), url("bg-night.png");
+    background-image:linear-gradient(rgba(11,18,32,.55),rgba(11,18,32,.55)), url("backgrounds/night.jpg");
   }
 
   /* ---------- Wrapper : mobile-first, desktop centers ---------- */
@@ -278,10 +278,6 @@ html[data-theme="dark"], html[data-theme="black"] select{
   .recurring-tpl-row{ display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:9px 12px; margin-bottom:7px; }
   .recurring-tpl-row .rt-info{ font-size:12.5px; }
   .recurring-tpl-row .rt-info b{ display:block; font-size:13px; }
-  .recurring-history-list{ display:flex; flex-wrap:wrap; gap:5px; margin-top:6px; }
-  .rh-chip{ font-size:10.5px; border-radius:6px; padding:2px 6px; }
-  .rh-chip.paid{ background:rgba(var(--acc-rgb,13,148,136),.12); color:var(--ledger-green); }
-  .rh-chip.skipped{ background:var(--soft-bg); color:var(--disabled-txt); }
 
   .toast{
     position:fixed; left:50%; bottom:24px; transform:translate(-50%,18px);
@@ -528,7 +524,6 @@ html[data-theme="dark"], html[data-theme="black"] select{
     box-shadow:var(--shadow-sm);
     transition:box-shadow .15s;
   }
-  .acc-card.clickable:active{ box-shadow:none; }
   .acc-card.cash{ border-left-color:var(--ledger-green); }
   .acc-card.bank{ border-left-color:var(--blue); }
   .acc-card.bkash{ border-left-color:var(--purple); }
@@ -538,8 +533,6 @@ html[data-theme="dark"], html[data-theme="black"] select{
   .acc-card .acc-sub{ font-size:9.5px; font-weight:600; color:var(--ledger-green); margin-top:3px; line-height:1.25; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .acc-card.loan{ border-left-color:var(--ledger-red); }
   .acc-card .val.loan-val{ color:var(--ledger-red); }
-  .acc-card.clickable{ cursor:pointer; }
-  .acc-card.clickable:active{ background:var(--soft-bg); }
   .acc-card.cmp{ padding:8px 8px; }
   .acc-card.cmp .lbl{ font-size:10px; margin-bottom:2px; }
   .acc-card.cmp .val{ font-size:13px; }
@@ -666,9 +659,6 @@ html[data-theme="dark"], html[data-theme="black"] select{
   .progress-fill.need{ background:var(--blue); }
   .progress-fill.want{ background:var(--purple); }
   .progress-label{ display:flex; justify-content:space-between; font-size:12px; color:#7a7259; margin-top:6px; }
-
-  .acc-mini-row{ display:flex; justify-content:space-between; font-size:14px; padding:7px 0; border-bottom:1px dashed var(--line); }
-  .acc-mini-row:last-child{ border-bottom:none; }
   .debt-box-row{ display:flex; justify-content:space-between; align-items:center; font-size:14px; padding:10px 2px; cursor:pointer; border-radius:8px; }
   .debt-box-row:active{ background:var(--soft-bg); }
   .debt-box-row .val{ font-weight:600; }
@@ -893,7 +883,7 @@ html[data-theme="black"] .account-row{
 
 /* Softer, rounder surfaces */
 .acc-card, .account-row, .recurring-item, .recurring-tpl-row, .plan-item,
-.settings-section, .settings-subsection, .confirm-box, .chart-card{
+.settings-section, .settings-subsection, .confirm-box{
   border-radius: var(--radius-md) !important;
 }
 .modal-card{ border-radius: var(--radius-lg) var(--radius-lg) 0 0 !important; }
@@ -969,25 +959,9 @@ html[data-theme="dark"] .backup-banner .bb-icon, html[data-theme="black"] .backu
 }
 #appLockScreen.show{ display:flex; }
 body.lock-active{ overflow:hidden; }
-#appLockScreen .lock-box{
-  width:100%; max-width:360px; text-align:center;
-  background:var(--card); border:1px solid var(--line); border-radius:var(--radius-lg,16px);
-  padding:28px 22px; box-shadow:var(--shadow-lg);
-}
-#appLockScreen .lock-icon{
-  width:84px; height:84px; margin:0 auto 12px; border-radius:50%;
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; background:linear-gradient(135deg, var(--ledger-green) 0%, #115E59 100%);
-  box-shadow:var(--shadow-md);
-}
-#appLockScreen .lock-icon svg{ display:block; }
 #appLockScreen h2{ margin:4px 0 2px; font-size:18px; color:var(--ledger-green); }
 #appLockScreen .settings-desc{ margin-top:2px; }
 #appLockScreen input{ width:100%; text-align:center; letter-spacing:.5px; }
-#appLockScreen .lock-forgot-link{
-  display:block; margin-top:16px; font-size:12.5px; color:var(--gold);
-  text-decoration:none; font-weight:600;
-}
 html[data-theme="dark"] #appLockScreen, html[data-theme="black"] #appLockScreen{ background:var(--paper); }
 
 /* forgotPwModal ও lockPasswordModal লক স্ক্রিন (z-index:99999) থেকে ওপরে
@@ -1518,7 +1492,6 @@ html:root .acc-card::before{
   content:''; position:absolute; left:0; top:18px; bottom:18px; width:5px; border-radius:0 5px 5px 0;
   border-left:5px solid transparent; border-left-color:inherit; box-sizing:border-box;
 }
-html:root .acc-card.clickable:active{ transform:scale(.98); background:var(--card); }
 html:root .acc-card .lbl{ font-size:12px; font-weight:600; color:var(--disabled-txt); margin-bottom:6px; }
 html:root .acc-card .val{ font-size:21px; font-weight:800; letter-spacing:-.3px; }
 html:root .acc-card .acc-sub{ font-size:10px; }
@@ -1666,7 +1639,6 @@ html:root .month-select button{ width:42px; height:42px; border-radius:50% !impo
 .chart-detail{ border-radius:16px; box-shadow:var(--sh-card); }
 .chart-legend{ font-weight:600; }
 .chart-dot, .pie-dot{ border-radius:50%; }
-.acc-mini-row{ padding:10px 0; border-bottom:1px solid var(--line); }
 .debt-box-row{ padding:12px 6px; border-radius:14px; }
 .debt-box-divider{ background:var(--line); opacity:.7; }
 .budget-block .bt{ font-weight:700; }
@@ -1706,8 +1678,6 @@ html:root .confirm-box{ border-radius:20px !important; padding:6px 16px; backgro
 #appLockScreen{ background:
   radial-gradient(520px 340px at 100% 0%, rgba(20,184,166,.20), transparent 60%),
   radial-gradient(420px 300px at 0% 100%, rgba(99,102,241,.12), transparent 60%), var(--paper); }
-#appLockScreen .lock-box{ border-radius:30px; padding:32px 24px; box-shadow:var(--sh-card), 0 30px 60px -20px rgba(15,23,42,.35); }
-#appLockScreen .lock-icon{ box-shadow:0 18px 34px -10px rgba(var(--acc-rgb-d,15,118,110),.7), 0 0 0 8px rgba(20,184,166,.14); }
 #appLockScreen h2{ color:var(--ink); font-size:20px; font-weight:800; }
 
 /* ---------- ডার্ক / ব্ল্যাক ফাইন-টিউন ---------- */
@@ -1969,63 +1939,14 @@ body, header, .tabs, .btn, .tab-ind, .seg-thumb{ transition:background-color .35
 /* ============================================================
    Smart note field (saved names per type)
    ============================================================ */
-.nb-wrap{ position:relative; display:block; width:100%; min-width:0; }
-.nb-wrap .nb-input{ padding-right:46px !important; }
-.nb-chev{
-  position:absolute; right:6px; top:50%; transform:translateY(-50%); width:36px; height:36px;
-  display:flex; align-items:center; justify-content:center; padding:0; border:none; border-radius:11px;
-  background:transparent; cursor:pointer; -webkit-tap-highlight-color:transparent;
-}
-.nb-chev svg{ width:18px; height:18px; fill:none; stroke:var(--pr-1); stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; transition:transform .25s cubic-bezier(.34,1.56,.64,1); }
-.nb-wrap.open .nb-chev svg{ transform:rotate(180deg); }
-.nb-wrap .nb-input::-webkit-calendar-picker-indicator{ display:none !important; }
-
-.nb-pop{
-  position:fixed; z-index:100001; display:none; overflow:hidden;
-  background:color-mix(in srgb, var(--card) 96%, transparent);
-  -webkit-backdrop-filter:blur(18px) saturate(1.5); backdrop-filter:blur(18px) saturate(1.5);
-  border:1px solid color-mix(in srgb, var(--line) 80%, transparent); border-radius:18px;
-  box-shadow:0 22px 48px -14px rgba(8,15,25,.45), 0 2px 6px rgba(8,15,25,.08);
-  transform-origin:top center;
-}
-.nb-pop.up{ transform-origin:bottom center; }
-.nb-pop.show{ display:block; animation:nbIn .24s cubic-bezier(.34,1.3,.5,1); }
 @keyframes nbIn{ from{ opacity:0; transform:translateY(-6px) scale(.97); } to{ opacity:1; transform:none; } }
-.nb-pop.up.show{ animation-name:nbInUp; }
 @keyframes nbInUp{ from{ opacity:0; transform:translateY(6px) scale(.97); } to{ opacity:1; transform:none; } }
-.nb-head{ padding:10px 12px 4px; }
 .nb-badge{
   display:inline-flex; align-items:center; padding:4px 10px; border-radius:999px; font-size:11.5px; font-weight:800;
 }
 .nb-badge.income{ color:var(--ledger-green); background:color-mix(in srgb, var(--ledger-green) 14%, transparent); }
 .nb-badge.expense{ color:var(--ledger-red,#DC2626); background:color-mix(in srgb, var(--ledger-red,#DC2626) 13%, transparent); }
-.nb-list{ overflow-y:auto; overscroll-behavior:contain; touch-action:pan-y; padding:4px 6px 8px; scrollbar-width:none; }
-.nb-list::-webkit-scrollbar{ display:none; }
-.nb-item{
-  display:flex; align-items:center; gap:10px; width:100%; padding:8px 6px 8px 8px; margin:0;
-  font:inherit; font-size:15px; font-weight:600; color:var(--ink); text-align:left; cursor:pointer;
-  background:transparent; border:none; border-radius:13px; transition:background .15s;
-  -webkit-tap-highlight-color:transparent;
-}
-.nb-item:active{ background:var(--soft-bg); }
-.nb-ico{
-  width:30px; height:30px; flex-shrink:0; display:flex; align-items:center; justify-content:center; border-radius:10px;
-  color:var(--ledger-green); background:color-mix(in srgb, var(--ledger-green) 13%, transparent);
-}
-.nb-pop.expense .nb-ico{ color:var(--ledger-red,#DC2626); background:color-mix(in srgb, var(--ledger-red,#DC2626) 12%, transparent); }
-.nb-ico svg{ width:16px; height:16px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-.nb-name{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.nb-name b{ font-weight:800; }
-.nb-add{ background:color-mix(in srgb, var(--pr-1) 11%, transparent); margin-bottom:4px; }
-.nb-add .nb-ico{ color:#fff; background:linear-gradient(145deg,var(--pr-1),var(--pr-2)); }
-.nb-x{
-  width:30px; height:30px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;
-  border:none; border-radius:9px; background:transparent; color:var(--disabled-txt); cursor:pointer; opacity:.75;
-}
-.nb-x:active{ background:var(--soft-bg); color:var(--ledger-red,#DC2626); }
-.nb-x svg{ width:14px; height:14px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; }
 .nb-empty{ padding:14px 10px 12px; font-size:13px; color:var(--disabled-txt); text-align:center; }
-@media (prefers-reduced-motion: reduce){ .nb-pop.show{ animation:none; } .nb-chev svg{ transition:none; } }
 
 /* ============================================================
    Compact sizing (v12) — সব কিছু একটু ছোট ও সুসংগত
@@ -2083,10 +2004,6 @@ html:root input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), 
 .ps-item{ font-size:14.5px; padding:8px 10px; border-radius:15px; }
 .ps-title{ font-size:14.5px; }
 .ps-check{ width:22px; height:22px; }
-.nb-wrap .nb-input{ padding-right:42px !important; }
-.nb-chev{ width:32px; height:32px; }
-.nb-item{ font-size:14px; padding:6px 6px 6px 8px; }
-.nb-ico{ width:26px; height:26px; border-radius:8px; }
 html:root .btn{ min-height:44px; padding:10px 14px; font-size:14.5px; border-radius:14px !important; }
 html:root .headline-seg button{ padding:11px 0; font-size:14.5px; border-radius:12px !important; }
 html:root .seg button{ padding:8px 4px; font-size:12.5px; border-radius:11px; }
@@ -2142,12 +2059,6 @@ input.nb-native{ position:absolute !important; inset:0; width:100%; height:100%;
 .nb-sheet .ps-list{ min-height:60px; }
 .nb-row{ cursor:pointer; }
 .nb-row .ps-check{ margin-left:auto; }
-.nb-del{
-  width:28px; height:28px; flex-shrink:0; display:flex; align-items:center; justify-content:center; padding:0;
-  border:none; border-radius:9px; background:transparent; color:var(--disabled-txt); cursor:pointer; opacity:.7;
-}
-.nb-del:active{ background:var(--soft-bg); color:var(--ledger-red,#DC2626); }
-.nb-del svg{ width:13px; height:13px; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; }
 .nb-none{ color:var(--disabled-txt); }
 .nb-none .ps-ico{ color:var(--disabled-txt) !important; }
 .nb-empty2{ padding:18px 10px 14px; font-size:13px; text-align:center; color:var(--disabled-txt); }
@@ -2238,9 +2149,6 @@ html[data-theme="dark"] .nb-sheet .ps-item, html[data-theme="black"] .nb-sheet .
 .nb-sheet .ps-item.on .ps-check{ box-shadow:0 6px 14px -4px rgba(var(--acc-rgb-d,15,118,110),.75), inset 0 1px 0 rgba(255,255,255,.35); }
 
 /* delete button */
-.nb-sheet .nb-del{ width:32px; height:32px; border-radius:50%; opacity:.55; transition:background .15s, color .15s, opacity .15s; }
-.nb-sheet .nb-del svg{ width:14px; height:14px; }
-.nb-sheet .nb-del:active{ opacity:1; background:color-mix(in srgb, var(--ledger-red,#DC2626) 14%, transparent); }
 
 /* "None" row — quieter */
 .nb-sheet .nb-none{ background:transparent; box-shadow:none; border-style:dashed; border-color:color-mix(in srgb, var(--ink) 12%, transparent); font-weight:600; }
@@ -2348,12 +2256,6 @@ html[data-theme="dark"] .nb-sheet .ps-item, html[data-theme="black"] .nb-sheet .
   border-radius:18px; background:var(--card); border:1px solid var(--line);
 }
 .nm-row.t-expense{ --nm-tone: var(--ledger-red,#DC2626); }
-.nm-ico{
-  width:38px; height:38px; flex-shrink:0; border-radius:13px; display:flex; align-items:center; justify-content:center; color:var(--nm-tone);
-  background:linear-gradient(150deg, color-mix(in srgb, var(--nm-tone) 20%, var(--card)), color-mix(in srgb, var(--nm-tone) 7%, var(--card)));
-  box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--nm-tone) 22%, transparent);
-}
-.nm-ico svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
 .nm-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
 .nm-name{ font-size:14.5px; font-weight:800; color:var(--ink); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .nm-use{ font-size:11.5px; font-weight:600; color:var(--disabled-txt); }
@@ -2423,8 +2325,8 @@ html[data-theme="black"] #settingsModal .seg.type-seg button.on.income{ backgrou
    v18 — কাস্টমস মোড: ব্যাকগ্রাউন্ড ছবি + গ্যালারি
    ============================================================ */
 html[data-bg] body{ background-size:cover; background-position:center top; background-attachment:fixed; background-repeat:no-repeat; }
-html[data-bg="day"] body{ background-image:linear-gradient(rgba(248,250,252,.55),rgba(248,250,252,.55)), url("bg-day.png"); }
-html[data-bg="night"] body{ background-image:linear-gradient(rgba(11,18,32,.55),rgba(11,18,32,.55)), url("bg-night.png"); }
+html[data-bg="day"] body{ background-image:linear-gradient(rgba(248,250,252,.55),rgba(248,250,252,.55)), url("backgrounds/day.jpg"); }
+html[data-bg="night"] body{ background-image:linear-gradient(rgba(11,18,32,.55),rgba(11,18,32,.55)), url("backgrounds/night.jpg"); }
 html[data-bg="pearl"] body{ background-image:url("backgrounds/pearl.jpg"); }
 html[data-bg="mint"] body{ background-image:url("backgrounds/mint.jpg"); }
 html[data-bg="sunrise"] body{ background-image:url("backgrounds/sunrise.jpg"); }
@@ -2467,7 +2369,7 @@ html[data-bg="graphite"] body{ background-image:url("backgrounds/graphite.jpg");
 @media (prefers-reduced-motion: reduce){ .bg-tile, .bg-prev, .bg-check{ transition:none; } }
 
 /* Arcus logo image */
-.brand-img{ width:100%; height:100%; display:block; object-fit:cover; border-radius:inherit; }
+.brand-img{ width:100%; height:100%; display:block; object-fit:cover; border-radius:inherit; -webkit-touch-callout:none; -webkit-user-select:none; user-select:none; -webkit-user-drag:none; pointer-events:none; }
 header .app-icon{ padding:0 !important; overflow:hidden; background:transparent !important; box-shadow:none !important; border:0 !important; }
 #settingsModal .st-hero-logo, #settingsModal .about-logo{ padding:0; overflow:hidden; background:transparent; border:0; }
 #settingsModal .about-h{ margin:14px 0 6px; font-size:13.5px; font-weight:800; color:var(--ink); }

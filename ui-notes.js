@@ -240,7 +240,7 @@
         return '<div class="nm-row editing t-'+mgrType+'" data-i="'+i+'">'+ico+
           '<input type="text" class="nm-in" maxlength="60" autocomplete="off" value="'+esc(n)+'" placeholder="'+esc(T('noteSugNamePh','নাম লিখুন'))+'">'+
           '<button type="button" class="nm-btn ok" data-nm="save" aria-label="'+esc(T('noteSugSave','সেভ'))+'">'+CHECK+'</button>'+
-          '<button type="button" class="nm-btn" data-nm="cancel" aria-label="'+esc(T('cancelBtn','বাতিল'))+'">'+X+'</button></div>';
+          '<button type="button" class="nm-btn" data-nm="cancel" aria-label="'+esc(T('cancelEditBtn','বাতিল করো'))+'">'+X+'</button></div>';
       }
       return '<div class="nm-row t-'+mgrType+'" data-i="'+i+'">'+ico+
         '<span class="nm-info"><span class="nm-name">'+esc(n)+'</span>'+
@@ -259,7 +259,7 @@
     if(r.err){
       inp.classList.add('shake'); setTimeout(()=> inp.classList.remove('shake'), 400);
       if(r.err === 'dup') toast(T('noteDupToast','এই নামটি আগে থেকেই আছে'));
-      if(r.err === 'save') toast(T('noteRenameFailToast','নাম বদলানো যায়নি — স্টোরেজ ভরা থাকতে পারে'));
+      if(r.err === 'save') toast(T('storageSaveFailMsg','সেভ হয়নি — এখনই ব্যাকআপ নাও'));
       inp.focus(); return;
     }
     mgrEdit = null; renderManager();

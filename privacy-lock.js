@@ -1,32 +1,37 @@
 /* ============================================================
-   App Lock (প্রাইভেসি ও সেফটি)
-   - পুরো ফিচারটা এই একটা ফাইলে, বাকি অ্যাপের থেকে আলাদা।
-   - পাসওয়ার্ড/সিকিউরিটি উত্তর কখনোই plain text এ সেভ হয় না —
-     PBKDF2 (SHA-256, 150000 iterations) দিয়ে hash+salt আকারে থাকে।
-   - localStorage key গুলো ইচ্ছা করেই hisab_settings/ব্যাকআপ এক্সপোর্ট
-     থেকে আলাদা রাখা হয়েছে, যাতে এনক্রিপ্ট না করা ব্যাকআপ ফাইলে
-     পাসওয়ার্ড hash ভুলে চলে না যায়, আর অন্য ডিভাইসে ব্যাকআপ
-     রিস্টোর করলে এই ডিভাইসের লক/ফিঙ্গারপ্রিন্ট সেটআপ না ভাঙে।
-   - এটা শুধু একটা UI পর্দা — localStorage এ থাকা আসল ডেটা এনক্রিপ্ট
-     হয় না (সেটা আলাদা, অনেক বড় কাজ)। কেউ ব্রাউজার dev tools দিয়ে
-     ঘাঁটলে ডেটা দেখতে পারবে, কিন্তু সাধারণভাবে ফোন হাতে নিলে আটকাবে।
+   App Lock — v2 (PIN + Neumorphic lock screen)
+   ------------------------------------------------------------
+   - ৪–৮ ডিজিট PIN, PBKDF2-SHA256 (150k iter) hash+salt
+   - পুরনো password-ভিত্তিক লক থাকলে: first unlock-এ পুরনো PW
+     দিয়ে ঢুকে নতুন PIN সেট করতে হবে (one-time migration)
+   - WebAuthn biometric: prompt auto আসে না, keypad-এর আইকনে
+     ট্যাপ করলে OS prompt; mismatch/cancel-এ ডটের নিচে ছোট হিন্ট
+   - ভুল PIN: ৫ বার → ৩০s cooldown
+   - "USE PASSWORD" → security question → নতুন PIN
    ============================================================ */
 
-const LK_ENABLED   = 'hisab_lock_enabled';
-const LK_PW_HASH   = 'hisab_lock_pw_hash';
-const LK_PW_SALT   = 'hisab_lock_pw_salt';
-const LK_SQ        = 'hisab_lock_sq';
-const LK_SQ_HASH   = 'hisab_lock_sq_hash';
-const LK_SQ_SALT   = 'hisab_lock_sq_salt';
-const LK_WEBAUTHN  = 'hisab_lock_webauthn_id';
-const LK_ACTIVITY  = 'hisab_lock_last_activity';
-const LK_ATTEMPTS  = 'hisab_lock_attempts';
-const LK_COOLDOWN  = 'hisab_lock_cooldown_until';
-const LK_F_ATTEMPTS = 'hisab_lock_forgot_attempts';
-const LK_F_COOLDOWN = 'hisab_lock_forgot_cooldown_until';
-const IDLE_LIMIT_MS = 60 * 60 * 1000; /* ১ ঘণ্টা */
+/* ---------- Storage keys ---------- */
+const LK_ENABLED     = 'hisab_lock_enabled';
+const LK_PIN_HASH    = 'hisab_lock_pin_hash';
+const LK_PIN_SALT    = 'hisab_lock_pin_salt';
+const LK_PIN_LEN     = 'hisab_lock_pin_len';
+const LK_PW_HASH     = 'hisab_lock_pw_hash';      /* legacy */
+const LK_PW_SALT     = 'hisab_lock_pw_salt';      /* legacy */
+const LK_SQ          = 'hisab_lock_sq';
+const LK_SQ_HASH     = 'hisab_lock_sq_hash';
+const LK_SQ_SALT     = 'hisab_lock_sq_salt';
+const LK_WEBAUTHN    = 'hisab_lock_webauthn_id';
+const LK_ACTIVITY    = 'hisab_lock_last_activity';
+const LK_ATTEMPTS    = 'hisab_lock_attempts';
+const LK_COOLDOWN    = 'hisab_lock_cooldown_until';
+const LK_F_ATTEMPTS  = 'hisab_lock_forgot_attempts';
+const LK_F_COOLDOWN  = 'hisab_lock_forgot_cooldown_until';
+const IDLE_LIMIT_MS  = 60 * 60 * 1000;   /* ১ ঘণ্টা */
+const PIN_MIN_LEN    = 4;
+const PIN_MAX_LEN    = 8;
+const LK_VERSION_TXT = 'v85';
 
-/* ---------- ছোট ইউটিলিটি: hashing/base64 ---------- */
+/* ---------- hashing / base64 ---------- */
 function lkBufToB64(buf){
   let binary = '';
   const bytes = new Uint8Array(buf);
@@ -51,15 +56,15 @@ async function lkHashSecret(secret){
   return { hash: lkBufToB64(bits), salt: lkBufToB64(salt) };
 }
 async function lkVerifySecret(secret, hashB64, saltB64){
-  const salt = new Uint8Array(lkB64ToBuf(saltB64));
-  const bits = await lkDeriveBits(secret, salt);
-  return lkBufToB64(bits) === hashB64;
+  try{
+    const salt = new Uint8Array(lkB64ToBuf(saltB64));
+    const bits = await lkDeriveBits(secret, salt);
+    return lkBufToB64(bits) === hashB64;
+  }catch(e){ return false; }
 }
 function lkNormalizeAnswer(s){ return (s || '').trim().toLowerCase(); }
 
-/* T11: একাধিক কী লেখার আগে বর্তমান মান নিয়ে রাখা, ফেল করলে ঠিক সেই মানে ফেরানো।
-   (আগে ফেল হলে কী মুছে দেওয়া হতো — চেঞ্জ/রিসেটে পুরনো বৈধ পাসওয়ার্ডও চলে যেত)
-   snapshot[key] === null মানে লেখার আগে কী-টা ছিলই না → ফেরানোর সময় মুছে দেওয়া হয়। */
+/* ---------- snapshot/restore (atomic-ish write) ---------- */
 function lkSnapshotKeys(keys){
   const snap = {};
   keys.forEach(k=>{ try{ snap[k] = localStorage.getItem(k); }catch(e){ snap[k] = null; } });
@@ -73,9 +78,26 @@ function lkRestoreKeys(snap){
     }catch(e){}
   });
 }
+function lkSafeSet(key, val){
+  if(typeof safeSet === 'function') return safeSet(key, val);
+  try{ localStorage.setItem(key, val); return true; }catch(e){ return false; }
+}
+function lkSafeDel(key){ try{ localStorage.removeItem(key); }catch(e){} }
 
-/* ---------- বেসিক স্টেট চেক ---------- */
+/* ---------- state queries ---------- */
 function isLockEnabled(){ try{ return localStorage.getItem(LK_ENABLED) === '1'; }catch(e){ return false; } }
+function hasPinSet(){
+  try{ return !!localStorage.getItem(LK_PIN_HASH) && !!localStorage.getItem(LK_PIN_SALT); }catch(e){ return false; }
+}
+function hasOldPassword(){
+  try{ return !!localStorage.getItem(LK_PW_HASH) && !!localStorage.getItem(LK_PW_SALT); }catch(e){ return false; }
+}
+function getPinLength(){
+  try{
+    const n = Number(localStorage.getItem(LK_PIN_LEN));
+    return (n >= PIN_MIN_LEN && n <= PIN_MAX_LEN) ? n : 6;
+  }catch(e){ return 6; }
+}
 function fingerprintEnabled(){ try{ return !!localStorage.getItem(LK_WEBAUTHN); }catch(e){ return false; } }
 async function checkFingerprintAvailable(){
   try{
@@ -85,11 +107,7 @@ async function checkFingerprintAvailable(){
   }catch(e){ return false; }
 }
 
-/* ---------- WebAuthn (ফিঙ্গারপ্রিন্ট/ফেস) ----------
-   এখানে কোনো সার্ভার নেই, তাই সার্ভার-সাইড signature ভেরিফাই হয় না।
-   ব্রাউজার নিজেই ডিভাইসের বায়োমেট্রিক ভেরিফাই করে, আর ভেরিফাই ছাড়া
-   navigator.credentials.get() সফল হয় না — তাই লোকাল গেট হিসেবে এটা
-   নিরাপদ, কিন্তু এটা backup password এর মতো এনক্রিপশন কী না। */
+/* ---------- WebAuthn ---------- */
 async function registerFingerprint(){
   if(!lkCryptoAvailable()) throw new Error('crypto unavailable');
   const challenge = crypto.getRandomValues(new Uint8Array(32));
@@ -105,11 +123,8 @@ async function registerFingerprint(){
     }
   });
   if(!cred) throw new Error('no credential');
-  if(typeof safeSet === 'function'){
-    if(!safeSet(LK_WEBAUTHN, lkBufToB64(cred.rawId))) throw new Error('storage write failed');
-  }else{
-    localStorage.setItem(LK_WEBAUTHN, lkBufToB64(cred.rawId));
-  }
+  const idB64 = lkBufToB64(cred.rawId);
+  if(!lkSafeSet(LK_WEBAUTHN, idB64)) throw new Error('storage write failed');
 }
 async function unlockWithFingerprint(){
   const credIdB64 = localStorage.getItem(LK_WEBAUTHN);
@@ -127,104 +142,460 @@ async function unlockWithFingerprint(){
 }
 
 /* ============================================================
-   লক স্ক্রিন
+   DOM refs
    ============================================================ */
-const lockScreenEl = document.getElementById('appLockScreen');
+const lockScreenEl  = document.getElementById('appLockScreen');
+const lockMainShell = document.getElementById('lockMain');
+const lockAltShell  = document.getElementById('lockAltShell');
+const lockHeadingEl = document.getElementById('lockHeading');
+const lockDotsEl    = document.getElementById('lockDots');
+const lockHintEl    = document.getElementById('lockHint');
+const lockKeypadEl  = document.getElementById('lockKeypad');
+const lockForgotRow = document.getElementById('lockForgotRow');
+const lockAltBtn    = document.getElementById('lockAltBtn');
+const lockEyebrowEl = document.getElementById('lockEyebrow');
+const lockVersionEl = document.getElementById('lockVersion');
+
+/* ---------- Lock screen state ---------- */
+let lockMode = 'unlock';
+let lockOnSuccess = null;
+let pinBuf = '';
+let firstPin = null;
 let lockAttemptCount = 0, lockCooldownUntil = 0;
 try{ lockAttemptCount = Number(localStorage.getItem(LK_ATTEMPTS)) || 0; }catch(e){}
 try{ lockCooldownUntil = Number(localStorage.getItem(LK_COOLDOWN)) || 0; }catch(e){}
+let lkFpBusy = false;
 let lastActivityTime = Date.now();
+let _verifyTimer = null;
+let _cooldownTick = null;
 
-function recordActivity(){
-  lastActivityTime = Date.now();
-  try{ localStorage.setItem(LK_ACTIVITY, String(lastActivityTime)); }catch(e){}
+/* ---------- helpers ---------- */
+function lockActive(){ return lockScreenEl && lockScreenEl.classList.contains('show'); }
+function cooldownActive(){ return Date.now() < lockCooldownUntil; }
+function clearHint(){ if(lockHintEl){ lockHintEl.textContent = ''; lockHintEl.classList.remove('warn'); } }
+function setHint(txt, warn){
+  if(!lockHintEl) return;
+  lockHintEl.textContent = txt || '';
+  lockHintEl.classList.toggle('warn', !!warn);
 }
-function isCurrentlyLocked(){ return lockScreenEl.classList.contains('show'); }
+function setHeading(txt){ if(lockHeadingEl) lockHeadingEl.textContent = txt || ''; }
 
-function showLockScreenErr(msg){
-  const el = document.getElementById('lockScreenError');
-  el.textContent = msg; el.style.display = 'block';
+function buildDots(n){
+  if(!lockDotsEl) return;
+  lockDotsEl.innerHTML = '';
+  for(let i=0;i<n;i++){
+    const d = document.createElement('span');
+    d.className = 'pin-dot';
+    lockDotsEl.appendChild(d);
+  }
+}
+function updateDots(){
+  if(!lockDotsEl) return;
+  const dots = lockDotsEl.children;
+  for(let i=0;i<dots.length;i++) dots[i].classList.toggle('filled', i < pinBuf.length);
+}
+function shakeDots(){
+  if(!lockDotsEl) return;
+  lockDotsEl.classList.remove('shake'); void lockDotsEl.offsetWidth;
+  lockDotsEl.classList.add('shake');
+  setTimeout(()=> lockDotsEl.classList.remove('shake'), 460);
+}
+function flashDotsError(){
+  if(!lockDotsEl) return;
+  lockDotsEl.classList.add('error');
+  setTimeout(()=> lockDotsEl.classList.remove('error'), 900);
 }
 
-async function showLockScreen(){
+/* ---------- keypad icons ---------- */
+const LK_IC_FP = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M12 10a2 2 0 0 0-2 2c0 1.02-.1 2.51-.26 4"/><path d="M14 13.12c0 2.38 0 6.38-1 8.88"/><path d="M17.29 21.02c.12-.6.43-2.3.5-3.02"/><path d="M2 12a10 10 0 0 1 18-6"/><path d="M2 16h.01"/><path d="M21.8 16c.2-2 .131-5.354 0-6"/><path d="M5 19.5C5.5 18 6 15 6 12a6 6 0 0 1 .34-2"/><path d="M8.65 22c.21-.66.45-1.32.57-2"/><path d="M9 6.8a6 6 0 0 1 9 5.2v2"/></svg>';
+const LK_IC_OK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 12.5 10 17.5 19 7.5"/></svg>';
+const LK_IC_BK = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4H8l-7 8 7 8h13a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2z"/><path d="M18 9l-6 6"/><path d="M12 9l6 6"/></svg>';
+
+function buildKeypad(){
+  if(!lockKeypadEl) return;
+  const keys = ['1','2','3','4','5','6','7','8','9','special','0','back'];
+  lockKeypadEl.innerHTML = keys.map(k=>{
+    if(k === 'back')    return '<button type="button" class="pin-key pin-back" data-k="back" aria-label="Backspace">'+LK_IC_BK+'</button>';
+    if(k === 'special') return '<button type="button" class="pin-key pin-special" data-k="" aria-label=""></button>';
+    return '<button type="button" class="pin-key" data-k="'+k+'" aria-label="'+k+'">'+k+'</button>';
+  }).join('');
+}
+
+function setSpecialKey(){
+  const el = lockKeypadEl && lockKeypadEl.querySelector('.pin-special');
+  if(!el) return;
+  let html = '', k = '';
+  if(lockMode === 'setup' && pinBuf.length >= PIN_MIN_LEN && pinBuf.length <= PIN_MAX_LEN){
+    html = LK_IC_OK; k = 'check';
+  } else if((lockMode === 'unlock' || lockMode === 'verify') && fingerprintEnabled() && !cooldownActive()){
+    html = LK_IC_FP; k = 'finger';
+  }
+  el.innerHTML = html;
+  el.dataset.k = k;
+  el.setAttribute('aria-label', k === 'check' ? 'Confirm' : k === 'finger' ? 'Fingerprint' : '');
+  el.classList.toggle('hidden', !k);
+}
+
+function applyCooldownUI(){
+  const on = cooldownActive();
+  if(!lockKeypadEl) return;
+  lockKeypadEl.querySelectorAll('.pin-key').forEach(b=>{ b.disabled = on; });
+  clearInterval(_cooldownTick);
+  if(on){
+    const tick = ()=>{
+      if(!lockActive() || !cooldownActive()){
+        clearInterval(_cooldownTick); _cooldownTick = null;
+        applyCooldownUI();
+        return;
+      }
+      const s = Math.ceil((lockCooldownUntil - Date.now()) / 1000);
+      setHint(tfmt('lockScreenTooManyTries', { s }), true);
+    };
+    tick();
+    _cooldownTick = setInterval(tick, 1000);
+  } else {
+    clearHint();
+    setSpecialKey();
+  }
+}
+
+/* ---------- alt screen ---------- */
+function showAlt(html){
+  if(lockMainShell) lockMainShell.hidden = true;
+  if(lockAltShell){
+    lockAltShell.hidden = false;
+    lockAltShell.innerHTML = html;
+  }
+}
+function hideAlt(){
+  if(lockAltShell){ lockAltShell.hidden = true; lockAltShell.innerHTML = ''; }
+  if(lockMainShell) lockMainShell.hidden = false;
+}
+
+function ensureLockScreenMode(){
+  if(!hasPinSet() && hasOldPassword()) return 'migrate';
+  if(!hasPinSet() && !hasOldPassword()) return 'setup';
+  return 'unlock';
+}
+
+/* ---------- open lock screen ---------- */
+function showLockScreen(opts){
+  opts = opts || {};
+  lockMode = opts.mode || ensureLockScreenMode();
+  lockOnSuccess = opts.onSuccess || null;
+  pinBuf = ''; firstPin = null;
+
   lockScreenEl.classList.add('show');
   document.body.classList.add('lock-active');
-  document.getElementById('lockScreenPwInput').value = '';
-  document.getElementById('lockScreenError').style.display = 'none';
-  const fpBtn = document.getElementById('lockScreenFingerprintBtn');
-  const fpOk = fingerprintEnabled() && await checkFingerprintAvailable();
-  fpBtn.style.display = fpOk ? 'block' : 'none';
-  if(fpOk){
-    /* অ্যাপ খুলতেই নিজে থেকে ফিঙ্গারপ্রিন্ট চাওয়া হবে — বাতিল/ফেল করলে পাসওয়ার্ড স্ক্রিনই থাকবে */
-    runFingerprintUnlock(true);
-  }else{
-    setTimeout(()=>{ document.getElementById('lockScreenPwInput').focus(); }, 60);
+  hideAlt();
+  if(lockVersionEl) lockVersionEl.textContent = 'Version ' + LK_VERSION_TXT;
+
+  if(lockMode === 'migrate'){
+    lockMainShell.hidden = true;
+    lockAltShell.hidden = false;
+    lockAltShell.innerHTML = migrationHtml();
+    wireMigration();
+    setTimeout(()=>{ const i = document.getElementById('lockPwInput'); if(i) i.focus(); }, 60);
+    return;
   }
-}
-let lkFpBusy = false;
-async function runFingerprintUnlock(auto){
-  if(lkFpBusy || !fingerprintEnabled() || !isCurrentlyLocked()) return;
-  lkFpBusy = true;
-  try{
-    const ok = await unlockWithFingerprint();
-    if(ok) hideLockScreen();
-    else if(!auto) showLockScreenErr(L('lockScreenFingerprintFail'));
-  }catch(err){ /* ব্যবহারকারী বাতিল করলে বা মেলেনি — চুপচাপ পাসওয়ার্ড স্ক্রিনে থাকুক */ }
-  finally{
-    lkFpBusy = false;
-    if(auto && isCurrentlyLocked()){ try{ document.getElementById('lockScreenPwInput').focus(); }catch(e){} }
+
+  if(lockMode === 'forgot'){
+    openSecurityQuestionFlow();
+    return;
   }
+
+  if(lockMode === 'setup'){
+    setHeading(L('lockSetPinDesc'));
+    lockForgotRow.classList.add('hidden');
+    buildDots(PIN_MAX_LEN);
+  } else {
+    setHeading(L('lockEnterPin'));
+    if(lockMode === 'verify') lockForgotRow.classList.add('hidden');
+    else lockForgotRow.classList.remove('hidden');
+    buildDots(getPinLength());
+  }
+  if(lockEyebrowEl) lockEyebrowEl.textContent = L('lockLoginLabel');
+
+  updateDots(); setSpecialKey(); clearHint();
+  applyCooldownUI();
 }
+
+/* ---------- close lock screen ---------- */
 function hideLockScreen(){
   lockScreenEl.classList.remove('show');
   document.body.classList.remove('lock-active');
+  hideAlt();
+  lockMode = 'unlock';
+  lockOnSuccess = null;
+  pinBuf = ''; firstPin = null;
+  clearHint();
+  clearInterval(_cooldownTick); _cooldownTick = null;
   recordActivity();
 }
 
-async function attemptUnlock(pw){
-  if(Date.now() < lockCooldownUntil){
-    const s = Math.ceil((lockCooldownUntil - Date.now()) / 1000);
-    showLockScreenErr(tfmt('lockScreenTooManyTries', { s }));
+/* ============================================================
+   PIN entry
+   ============================================================ */
+function pressKey(k){
+  if(!k) return;
+  if(cooldownActive() && k !== 'back') return;
+
+  if(k === 'back'){
+    if(pinBuf.length){ pinBuf = pinBuf.slice(0, -1); updateDots(); setSpecialKey(); clearHint(); }
     return;
   }
-  const hash = localStorage.getItem(LK_PW_HASH);
-  const salt = localStorage.getItem(LK_PW_SALT);
-  if(!hash || !salt){ hideLockScreen(); return; } /* করাপ্ট অবস্থায় ব্যবহারকারীকে আটকে রাখা ঠিক না */
-  const ok = await lkVerifySecret(pw, hash, salt);
+  if(k === 'finger'){ runFingerprintUnlock(); return; }
+  if(k === 'check'){
+    if(lockMode === 'setup' && pinBuf.length >= PIN_MIN_LEN && pinBuf.length <= PIN_MAX_LEN){
+      firstPin = pinBuf;
+      pinBuf = '';
+      lockMode = 'setup-confirm';
+      setHeading(L('lockConfirmPinDesc'));
+      buildDots(firstPin.length);
+      updateDots(); setSpecialKey(); clearHint();
+    }
+    return;
+  }
+
+  const expected = (lockMode === 'setup') ? PIN_MAX_LEN
+                 : (lockMode === 'setup-confirm') ? firstPin.length
+                 : getPinLength();
+  if(pinBuf.length >= expected) return;
+  pinBuf += k;
+  updateDots(); setSpecialKey(); clearHint();
+
+  if(lockMode === 'setup-confirm' && pinBuf.length === firstPin.length){
+    clearTimeout(_verifyTimer);
+    _verifyTimer = setTimeout(handleConfirmPin, 160);
+  } else if((lockMode === 'unlock' || lockMode === 'verify') && pinBuf.length === getPinLength()){
+    clearTimeout(_verifyTimer);
+    _verifyTimer = setTimeout(handleUnlockPin, 160);
+  }
+}
+
+async function handleUnlockPin(){
+  const pin = pinBuf; pinBuf = '';
+  updateDots(); setSpecialKey();
+  const hash = localStorage.getItem(LK_PIN_HASH);
+  const salt = localStorage.getItem(LK_PIN_SALT);
+  if(!hash || !salt){ hideLockScreen(); return; }
+
+  const ok = await lkVerifySecret(pin, hash, salt);
   if(ok){
     lockAttemptCount = 0;
     try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); }catch(e){}
+    lockCooldownUntil = 0;
+    const cb = lockOnSuccess;
     hideLockScreen();
-  }else{
+    if(cb) cb();
+  } else {
     lockAttemptCount++;
     if(lockAttemptCount >= 5){
       lockCooldownUntil = Date.now() + 30000;
       lockAttemptCount = 0;
       try{ localStorage.setItem(LK_COOLDOWN, String(lockCooldownUntil)); localStorage.removeItem(LK_ATTEMPTS); }catch(e){}
-      showLockScreenErr(tfmt('lockScreenTooManyTries', { s: 30 }));
-    }else{
+      flashDotsError(); shakeDots();
+      applyCooldownUI();
+    } else {
       try{ localStorage.setItem(LK_ATTEMPTS, String(lockAttemptCount)); }catch(e){}
-      showLockScreenErr(L('lockScreenWrongPwErr'));
+      flashDotsError(); shakeDots();
+      setHint(L('lockErrPinWrong'), true);
+      setTimeout(clearHint, 1500);
     }
   }
 }
-document.getElementById('lockScreenUnlockBtn').addEventListener('click', ()=>{
-  attemptUnlock(document.getElementById('lockScreenPwInput').value);
-});
-document.getElementById('lockScreenPwInput').addEventListener('keypress', (e)=>{
-  if(e.key === 'Enter') document.getElementById('lockScreenUnlockBtn').click();
-});
-document.getElementById('lockScreenFingerprintBtn').addEventListener('click', ()=>{ runFingerprintUnlock(false); });
 
-/* ---------- আইডল টাইমআউট: ১ ঘণ্টা কিছু না করলে আবার লক ---------- */
-let lkThrottleTimer = null;
+async function handleConfirmPin(){
+  const pin = pinBuf;
+  if(pin !== firstPin){
+    pinBuf = '';
+    updateDots();
+    flashDotsError(); shakeDots();
+    setHint(L('lockErrPinMismatch'), true);
+    setTimeout(()=>{
+      firstPin = null;
+      lockMode = 'setup';
+      setHeading(L('lockSetPinDesc'));
+      buildDots(PIN_MAX_LEN);
+      updateDots(); setSpecialKey(); clearHint();
+    }, 1000);
+    return;
+  }
+
+  const len = pin.length;
+  const { hash, salt } = await lkHashSecret(pin);
+  const snap = lkSnapshotKeys([LK_PIN_HASH, LK_PIN_SALT, LK_PIN_LEN, LK_ENABLED]);
+  const ok1 = lkSafeSet(LK_PIN_HASH, hash);
+  const ok2 = ok1 && lkSafeSet(LK_PIN_SALT, salt);
+  const ok3 = ok2 && lkSafeSet(LK_PIN_LEN, String(len));
+  const ok4 = ok3 && lkSafeSet(LK_ENABLED, '1');
+  if(!ok1 || !ok2 || !ok3 || !ok4){
+    lkRestoreKeys(snap);
+    setHint(L('storageSaveFailMsg'), true);
+    return;
+  }
+  /* migration cleanup */
+  if(hasOldPassword()){ lkSafeDel(LK_PW_HASH); lkSafeDel(LK_PW_SALT); }
+
+  pinBuf = ''; firstPin = null; updateDots();
+  const cb = lockOnSuccess;
+  hideLockScreen();
+  if(cb) cb();
+  else {
+    if(typeof toast === 'function') toast(L('lockPinSetDone'));
+    updateSettingsPrivacyUI();
+  }
+}
+
+/* ---------- biometric ---------- */
+async function runFingerprintUnlock(){
+  if(lkFpBusy || !fingerprintEnabled() || !lockActive()) return;
+  if(cooldownActive()) return;
+  lkFpBusy = true;
+  clearHint();
+  try{
+    const ok = await unlockWithFingerprint();
+    if(ok){
+      lockAttemptCount = 0;
+      try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); }catch(e){}
+      lockCooldownUntil = 0;
+      const cb = lockOnSuccess;
+      hideLockScreen();
+      if(cb) cb();
+    } else {
+      setHint(L('lockErrFingerprint'), true);
+      setTimeout(clearHint, 2200);
+    }
+  }catch(err){
+    setHint(L('lockErrFingerprint'), true);
+    setTimeout(clearHint, 2200);
+  } finally {
+    lkFpBusy = false;
+  }
+}
+
+/* ============================================================
+   Migration (old password → new PIN)
+   ============================================================ */
+function migrationHtml(){
+  return '<div class="lock-shell-inner">'+
+    '<div class="lock-top">'+
+      '<div class="lock-eyebrow">'+L('lockLoginLabel')+'</div>'+
+      '<div class="lock-heading">'+L('lockMigrateTitle')+'</div>'+
+    '</div>'+
+    '<div class="lock-body">'+
+      '<div class="lock-pw-form">'+
+        '<div class="lock-sq">'+L('lockMigrateDesc')+'</div>'+
+        '<input type="password" id="lockPwInput" autocomplete="off" placeholder="'+L('lockPasswordDesc')+'">'+
+        '<div class="lock-hint alt" id="lockPwHint"></div>'+
+        '<button type="button" class="lock-btn" id="lockPwBtn">'+L('lockVerifyContinueBtn')+'</button>'+
+      '</div>'+
+      '<div class="lock-version">Version '+LK_VERSION_TXT+'</div>'+
+    '</div></div>';
+}
+function wireMigration(){
+  const inp = document.getElementById('lockPwInput');
+  const btn = document.getElementById('lockPwBtn');
+  const hint = document.getElementById('lockPwHint');
+  const submit = async ()=>{
+    const pw = inp ? inp.value : '';
+    if(!pw) return;
+    const hash = localStorage.getItem(LK_PW_HASH);
+    const salt = localStorage.getItem(LK_PW_SALT);
+    const ok = hash && salt && await lkVerifySecret(pw, hash, salt);
+    if(ok){
+      /* সোজা setup মোডে */
+      lockOnSuccess = null;
+      lockMode = 'setup';
+      hideAlt();
+      setHeading(L('lockSetPinDesc'));
+      lockForgotRow.classList.add('hidden');
+      buildDots(PIN_MAX_LEN);
+      updateDots(); setSpecialKey(); clearHint();
+      if(lockEyebrowEl) lockEyebrowEl.textContent = L('lockLoginLabel');
+    } else {
+      if(hint){ hint.textContent = L('lockErrPasswordWrong'); hint.classList.add('warn'); }
+    }
+  };
+  if(btn) btn.addEventListener('click', submit);
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
+}
+
+/* ============================================================
+   Forgot PIN → security question
+   ============================================================ */
+function openSecurityQuestionFlow(){
+  const sqRaw = localStorage.getItem(LK_SQ);
+  let sq = null;
+  try{ sq = sqRaw ? JSON.parse(sqRaw) : null; }catch(e){ sq = null; }
+  const qText = sq ? (sq.type === 'preset' ? L(sq.key) : sq.text) : null;
+  if(!sq){
+    showAlt('<div class="lock-shell-inner"><div class="lock-top"><div class="lock-eyebrow">'+L('lockLoginLabel')+'</div>'+
+      '<div class="lock-heading">'+L('lockSqTitle')+'</div></div>'+
+      '<div class="lock-body"><div class="lock-pw-form">'+
+      '<div class="lock-sq">'+L('forgotPwNoQSetMsg')+'</div>'+
+      '<button type="button" class="lock-btn ghost" id="lockSqBack">'+L('forgotPwCancelBtn')+'</button>'+
+      '</div></div></div>');
+    document.getElementById('lockSqBack').addEventListener('click', ()=>{
+      hideAlt();
+      showLockScreen({ mode: 'unlock' });
+    });
+    return;
+  }
+  showAlt('<div class="lock-shell-inner"><div class="lock-top">'+
+    '<div class="lock-eyebrow">'+L('lockLoginLabel')+'</div>'+
+    '<div class="lock-heading">'+L('forgotPwTitle')+'</div></div>'+
+    '<div class="lock-body"><div class="lock-pw-form">'+
+    '<div class="lock-sq">'+escapeHtmlLite(qText)+'</div>'+
+    '<input type="text" id="lockSqInput" autocomplete="off" placeholder="'+L('forgotPwAnswerPh')+'">'+
+    '<div class="lock-hint alt" id="lockSqHint"></div>'+
+    '<button type="button" class="lock-btn" id="lockSqBtn">'+L('forgotPwSubmitBtn')+'</button>'+
+    '<button type="button" class="lock-btn ghost" id="lockSqBack">'+L('forgotPwCancelBtn')+'</button>'+
+    '</div></div></div>');
+  const inp = document.getElementById('lockSqInput');
+  const btn = document.getElementById('lockSqBtn');
+  const back = document.getElementById('lockSqBack');
+  const hint = document.getElementById('lockSqHint');
+  setTimeout(()=>{ if(inp) inp.focus(); }, 60);
+  const submit = async ()=>{
+    const ans = lkNormalizeAnswer(inp ? inp.value : '');
+    if(!ans) return;
+    const hash = localStorage.getItem(LK_SQ_HASH);
+    const salt = localStorage.getItem(LK_SQ_SALT);
+    const ok = hash && salt && await lkVerifySecret(ans, hash, salt);
+    if(ok){
+      hideAlt();
+      lockMode = 'setup';
+      setHeading(L('lockSetPinDesc'));
+      lockForgotRow.classList.add('hidden');
+      buildDots(PIN_MAX_LEN);
+      updateDots(); setSpecialKey(); clearHint();
+    } else {
+      if(hint){ hint.textContent = L('forgotPwWrongErr'); hint.classList.add('warn'); }
+    }
+  };
+  if(btn) btn.addEventListener('click', submit);
+  if(inp) inp.addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); submit(); } });
+  if(back) back.addEventListener('click', ()=>{ hideAlt(); showLockScreen({ mode: 'unlock' }); });
+}
+function escapeHtmlLite(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ============================================================
+   Idle lock
+   ============================================================ */
+function recordActivity(){
+  lastActivityTime = Date.now();
+  try{ localStorage.setItem(LK_ACTIVITY, String(lastActivityTime)); }catch(e){}
+}
 function throttledRecordActivity(){
-  if(lkThrottleTimer) return;
-  lkThrottleTimer = setTimeout(()=>{ lkThrottleTimer = null; }, 5000);
-  recordActivity();
+  if(!throttledRecordActivity.t){
+    throttledRecordActivity.t = setTimeout(()=>{ throttledRecordActivity.t = null; recordActivity(); }, 5000);
+  }
 }
 function checkIdleLock(){
-  if(!isLockEnabled() || isCurrentlyLocked()) return;
+  if(!isLockEnabled() || lockActive()) return;
   let last = lastActivityTime;
   try{
     const stored = Number(localStorage.getItem(LK_ACTIVITY));
@@ -242,17 +613,20 @@ function initIdleWatch(){
 }
 
 /* ============================================================
-   সেটিংস: প্রাইভেসি ও সেফটি সেকশনের UI
+   Settings: Privacy & Safety UI
    ============================================================ */
 async function updateSettingsPrivacyUI(){
   const enabled = isLockEnabled();
-  document.getElementById('lockOffState').style.display = enabled ? 'none' : 'block';
-  document.getElementById('lockOnState').style.display = enabled ? 'block' : 'none';
+  const offEl = document.getElementById('lockOffState');
+  const onEl  = document.getElementById('lockOnState');
+  if(offEl) offEl.style.display = enabled ? 'none' : 'block';
+  if(onEl)  onEl.style.display  = enabled ? 'block' : 'none';
   if(!enabled) return;
   const fpRow = document.getElementById('fingerprintRow');
   const available = await checkFingerprintAvailable();
-  fpRow.style.display = available ? 'flex' : 'none';
-  if(available) document.getElementById('fingerprintToggle').checked = fingerprintEnabled();
+  if(fpRow) fpRow.style.display = available ? 'flex' : 'none';
+  const fpTgl = document.getElementById('fingerprintToggle');
+  if(available && fpTgl) fpTgl.checked = fingerprintEnabled();
 }
 const gearBtnEl = document.getElementById('gearBtn');
 if(gearBtnEl) gearBtnEl.addEventListener('click', updateSettingsPrivacyUI);
@@ -260,131 +634,48 @@ if(gearBtnEl) gearBtnEl.addEventListener('click', updateSettingsPrivacyUI);
 document.getElementById('fingerprintToggle').addEventListener('change', async (e)=>{
   const checked = e.target.checked;
   if(checked){
-    try{
-      await registerFingerprint();
-      toast(L('fingerprintEnabledToast'));
-    }catch(err){
-      e.target.checked = false;
-      toast(L('fingerprintEnableFailToast'));
-    }
-  }else{
-    try{ localStorage.removeItem(LK_WEBAUTHN); }catch(err){}
+    try{ await registerFingerprint(); toast(L('fingerprintEnabledToast')); }
+    catch(err){ e.target.checked = false; toast(L('fingerprintEnableFailToast')); }
+  } else {
+    lkSafeDel(LK_WEBAUTHN);
     toast(L('fingerprintDisabledToast'));
   }
 });
 
-/* ============================================================
-   পাসওয়ার্ড মোডাল (setup / change / verify / reset — একটাই মোডাল)
-   ============================================================ */
-const lockPwModalEl = document.getElementById('lockPasswordModal');
-let lockPwMode = null;
-let lockPwVerifiedCallback = null;
-
-function openLockPasswordModal(mode, onVerified){
-  lockPwMode = mode;
-  lockPwVerifiedCallback = onVerified || null;
-  const curInput = document.getElementById('lockCurrentPwInput');
-  const newInput = document.getElementById('lockNewPwInput');
-  const confInput = document.getElementById('lockConfirmPwInput');
-  const err = document.getElementById('lockPasswordError');
-  curInput.value = ''; newInput.value = ''; confInput.value = '';
-  err.style.display = 'none'; err.textContent = '';
-  const titleEl = document.getElementById('lockPasswordTitle');
-  const submitBtn = document.getElementById('lockPasswordSubmitBtn');
-  if(mode === 'setup'){
-    titleEl.textContent = L('lockSetupTitle');
-    curInput.style.display = 'none'; newInput.style.display = 'block'; confInput.style.display = 'block';
-    submitBtn.textContent = L('lockSetupSaveBtn');
-  }else if(mode === 'change'){
-    titleEl.textContent = L('lockChangeTitle');
-    curInput.style.display = 'block'; newInput.style.display = 'block'; confInput.style.display = 'block';
-    submitBtn.textContent = L('lockChangeSaveBtn');
-  }else if(mode === 'verify'){
-    titleEl.textContent = L('lockVerifyTitle');
-    curInput.style.display = 'block'; newInput.style.display = 'none'; confInput.style.display = 'none';
-    submitBtn.textContent = L('lockVerifyContinueBtn');
-  }else if(mode === 'reset'){
-    titleEl.textContent = L('lockResetTitle');
-    curInput.style.display = 'none'; newInput.style.display = 'block'; confInput.style.display = 'block';
-    submitBtn.textContent = L('lockSetupSaveBtn');
-  }
-  lockPwModalEl.classList.add('open');
-  lockBodyScroll();
-  setTimeout(()=>{ (mode === 'verify' ? curInput : newInput).focus(); }, 60);
-}
-function closeLockPasswordModal(){ lockPwModalEl.classList.remove('open'); unlockBodyScroll(); }
-document.getElementById('lockPasswordCloseBtn').addEventListener('click', closeLockPasswordModal);
-lockPwModalEl.addEventListener('click', (e)=>{ if(e.target === lockPwModalEl) closeLockPasswordModal(); });
-function showLockPwError(msg){
-  const err = document.getElementById('lockPasswordError');
-  err.textContent = msg; err.style.display = 'block';
-}
-['lockCurrentPwInput','lockNewPwInput','lockConfirmPwInput'].forEach(id=>{
-  document.getElementById(id).addEventListener('keypress', (e)=>{
-    if(e.key === 'Enter') document.getElementById('lockPasswordSubmitBtn').click();
-  });
+/* ---------- Enable / Change / Disable ---------- */
+document.getElementById('enableLockBtn').addEventListener('click', ()=>{
+  if(!lkCryptoAvailable()){ toast(L('storageSaveFailMsg')); return; }
+  showLockScreen({ mode: 'setup', onSuccess: ()=>{
+    toast(L('lockPinSetDone'));
+    updateSettingsPrivacyUI();
+    openSecurityQModal('setup');
+  }});
 });
-
-document.getElementById('lockPasswordSubmitBtn').addEventListener('click', async ()=>{
-  if(!lkCryptoAvailable()){ showLockPwError(L('lockCurrentPwWrongErr')); return; }
-  const cur = document.getElementById('lockCurrentPwInput').value;
-  const nw = document.getElementById('lockNewPwInput').value;
-  const conf = document.getElementById('lockConfirmPwInput').value;
-
-  try{
-    if(lockPwMode === 'verify'){
-      const hash = localStorage.getItem(LK_PW_HASH), salt = localStorage.getItem(LK_PW_SALT);
-      const ok = hash && salt && await lkVerifySecret(cur, hash, salt);
-      if(!ok){ showLockPwError(L('lockCurrentPwWrongErr')); return; }
-      closeLockPasswordModal();
-      if(lockPwVerifiedCallback) lockPwVerifiedCallback();
-      return;
-    }
-
-    if(lockPwMode === 'change'){
-      const hash = localStorage.getItem(LK_PW_HASH), salt = localStorage.getItem(LK_PW_SALT);
-      const ok = hash && salt && await lkVerifySecret(cur, hash, salt);
-      if(!ok){ showLockPwError(L('lockCurrentPwWrongErr')); return; }
-    }
-
-    if(nw.length < 4){ showLockPwError(L('lockPwTooShortErr')); return; }
-    if(nw !== conf){ showLockPwError(L('lockPwMismatchErr')); return; }
-
-    const { hash: newHash, salt: newSalt } = await lkHashSecret(nw);
-    /* T11: সব-বা-কিছুই-না — hash+salt (আর setup-এ LK_ENABLED) সব লিখতে হবে; কোনোটা ফেল করলে লেখার আগের
-       অবস্থায় ফেরত যাই (change/reset-এ পুরনো বৈধ পাসওয়ার্ড অক্ষত, setup-এ কিছুই বাকি থাকে না)।
-       ফেলের কারণ স্টোরেজ, তাই বার্তা storageSaveFailMsg (আগে ভুল করে "কমপক্ষে ৪ অক্ষর" দেখাত) */
-    const pwSnap = lkSnapshotKeys([LK_PW_HASH, LK_PW_SALT, LK_ENABLED]);
-    const ok1 = (typeof safeSet === 'function') ? safeSet(LK_PW_HASH, newHash) : (localStorage.setItem(LK_PW_HASH, newHash), true);
-    const ok2 = ok1 && ((typeof safeSet === 'function') ? safeSet(LK_PW_SALT, newSalt) : (localStorage.setItem(LK_PW_SALT, newSalt), true));
-    if(!ok1 || !ok2){
-      lkRestoreKeys(pwSnap);
-      showLockPwError(L('storageSaveFailMsg'));
-      return;
-    }
-
-    if(lockPwMode === 'setup'){
-      const okEnabled = (typeof safeSet === 'function') ? safeSet(LK_ENABLED, '1') : (localStorage.setItem(LK_ENABLED, '1'), true);
-      if(!okEnabled){ lkRestoreKeys(pwSnap); showLockPwError(L('storageSaveFailMsg')); return; }
-      closeLockPasswordModal();
-      openSecurityQModal('setup');
-    }else if(lockPwMode === 'change'){
-      closeLockPasswordModal();
+document.getElementById('changeLockPwBtn').addEventListener('click', ()=>{
+  showLockScreen({ mode: 'verify', onSuccess: ()=>{
+    showLockScreen({ mode: 'setup', onSuccess: ()=>{
       toast(L('lockPwChangedToast'));
       updateSettingsPrivacyUI();
-    }else if(lockPwMode === 'reset'){
-      closeLockPasswordModal();
-      toast(L('lockPwChangedToast'));
-      hideLockScreen();
-      updateSettingsPrivacyUI();
-    }
-  }catch(err){
-    showLockPwError(L('lockCurrentPwWrongErr'));
-  }
+    }});
+  }});
+});
+document.getElementById('changeSecurityQBtn').addEventListener('click', ()=>{
+  showLockScreen({ mode: 'verify', onSuccess: ()=> openSecurityQModal('change') });
+});
+function performDisableLock(){
+  [LK_ENABLED, LK_PIN_HASH, LK_PIN_SALT, LK_PIN_LEN,
+   LK_PW_HASH, LK_PW_SALT, LK_SQ, LK_SQ_HASH, LK_SQ_SALT,
+   LK_WEBAUTHN, LK_ACTIVITY, LK_ATTEMPTS, LK_COOLDOWN,
+   LK_F_ATTEMPTS, LK_F_COOLDOWN].forEach(lkSafeDel);
+  toast(L('lockDisabledToast'));
+  updateSettingsPrivacyUI();
+}
+document.getElementById('disableLockBtn').addEventListener('click', ()=>{
+  showLockScreen({ mode: 'verify', onSuccess: ()=> openSimpleConfirm(L('disableLockConfirmMsg'), performDisableLock) });
 });
 
 /* ============================================================
-   সিকিউরিটি প্রশ্ন মোডাল
+   Security question modal
    ============================================================ */
 const securityQModalEl = document.getElementById('securityQModal');
 let securityQMode = null;
@@ -399,19 +690,15 @@ function openSecurityQModal(mode){
   lockBodyScroll();
   setTimeout(()=>{ document.getElementById('securityQSelect').focus(); }, 60);
 }
-function closeSecurityQModal(finalize){
+function closeSecurityQModal(){
   securityQModalEl.classList.remove('open'); unlockBodyScroll();
-  if(finalize && securityQMode === 'setup'){
-    toast(L('lockPwSetToast'));
-    updateSettingsPrivacyUI();
-  }
   securityQMode = null;
 }
 document.getElementById('securityQSelect').addEventListener('change', (e)=>{
   document.getElementById('securityQCustomInput').style.display = e.target.value === 'custom' ? 'block' : 'none';
 });
-document.getElementById('securityQCloseBtn').addEventListener('click', ()=> closeSecurityQModal(true));
-securityQModalEl.addEventListener('click', (e)=>{ if(e.target === securityQModalEl) closeSecurityQModal(true); });
+document.getElementById('securityQCloseBtn').addEventListener('click', ()=> closeSecurityQModal());
+securityQModalEl.addEventListener('click', (e)=>{ if(e.target === securityQModalEl) closeSecurityQModal(); });
 document.getElementById('securityAnswerInput').addEventListener('keypress', (e)=>{
   if(e.key === 'Enter') document.getElementById('securityQSaveBtn').click();
 });
@@ -421,30 +708,24 @@ document.getElementById('securityQSaveBtn').addEventListener('click', async ()=>
   const answer = document.getElementById('securityAnswerInput').value;
   const err = document.getElementById('securityQError');
   if((sel === 'custom' && !customText) || !answer.trim()){
-    err.textContent = L('securityQRequiredErr'); err.style.display = 'block';
-    return;
+    err.textContent = L('securityQRequiredErr'); err.style.display = 'block'; return;
   }
   if(!lkCryptoAvailable()){
-    err.textContent = L('securityQRequiredErr'); err.style.display = 'block';
-    return;
+    err.textContent = L('securityQRequiredErr'); err.style.display = 'block'; return;
   }
   try{
     const sqData = sel === 'custom' ? { type:'custom', text: customText } : { type:'preset', key: sel };
     const { hash, salt } = await lkHashSecret(lkNormalizeAnswer(answer));
-    /* T11: সব-বা-কিছুই-না — তিনটে কী-ই লিখতে হবে; ফেল করলে লেখার আগের অবস্থায় ফেরত (পুরনো সিকিউরিটি
-       প্রশ্ন থাকলে সেটা অক্ষত, নইলে কিছুই থাকে না)। বার্তা storageSaveFailMsg (আগে ভুল করে "প্রশ্ন ও উত্তর দুটোই দিতে হবে") */
     const sqSnap = lkSnapshotKeys([LK_SQ, LK_SQ_HASH, LK_SQ_SALT]);
-    const ok1 = (typeof safeSet === 'function') ? safeSet(LK_SQ, JSON.stringify(sqData)) : (localStorage.setItem(LK_SQ, JSON.stringify(sqData)), true);
-    const ok2 = ok1 && ((typeof safeSet === 'function') ? safeSet(LK_SQ_HASH, hash) : (localStorage.setItem(LK_SQ_HASH, hash), true));
-    const ok3 = ok2 && ((typeof safeSet === 'function') ? safeSet(LK_SQ_SALT, salt) : (localStorage.setItem(LK_SQ_SALT, salt), true));
+    const ok1 = lkSafeSet(LK_SQ, JSON.stringify(sqData));
+    const ok2 = ok1 && lkSafeSet(LK_SQ_HASH, hash);
+    const ok3 = ok2 && lkSafeSet(LK_SQ_SALT, salt);
     if(!ok1 || !ok2 || !ok3){
       lkRestoreKeys(sqSnap);
-      err.textContent = L('storageSaveFailMsg'); err.style.display = 'block';
-      return;
+      err.textContent = L('storageSaveFailMsg'); err.style.display = 'block'; return;
     }
-    const wasSetup = securityQMode === 'setup';
     securityQModalEl.classList.remove('open'); unlockBodyScroll();
-    toast(wasSetup ? L('lockPwSetToast') : L('securityQSavedToast'));
+    toast(L('securityQSavedToast'));
     updateSettingsPrivacyUI();
     securityQMode = null;
   }catch(e){
@@ -453,88 +734,45 @@ document.getElementById('securityQSaveBtn').addEventListener('click', async ()=>
 });
 
 /* ============================================================
-   "পাসওয়ার্ড ভুলে গেছি" — সিকিউরিটি প্রশ্ন দিয়ে রিসেট
+   Keypad + keyboard wiring
    ============================================================ */
-const forgotPwModalEl = document.getElementById('forgotPwModal');
-let forgotAttemptCount = 0, forgotCooldownUntil = 0;
-try{ forgotAttemptCount = Number(localStorage.getItem(LK_F_ATTEMPTS)) || 0; }catch(e){}
-try{ forgotCooldownUntil = Number(localStorage.getItem(LK_F_COOLDOWN)) || 0; }catch(e){}
-
-function openForgotPwModal(){
-  const sqRaw = localStorage.getItem(LK_SQ);
-  let sq = null;
-  try{ sq = sqRaw ? JSON.parse(sqRaw) : null; }catch(e){ sq = null; }
-  if(!sq){ openAlert(L('forgotPwNoQSetMsg')); return; }
-  const qText = sq.type === 'preset' ? L(sq.key) : sq.text;
-  document.getElementById('forgotPwQuestionText').textContent = qText;
-  document.getElementById('forgotPwAnswerInput').value = '';
-  document.getElementById('forgotPwError').style.display = 'none';
-  forgotPwModalEl.classList.add('open');
-  lockBodyScroll();
-  setTimeout(()=>{ document.getElementById('forgotPwAnswerInput').focus(); }, 60);
-}
-function closeForgotPwModal(){ forgotPwModalEl.classList.remove('open'); unlockBodyScroll(); }
-document.getElementById('lockScreenForgotLink').addEventListener('click', openForgotPwModal);
-document.getElementById('forgotPwCloseBtn').addEventListener('click', closeForgotPwModal);
-document.getElementById('forgotPwCancelBtn').addEventListener('click', closeForgotPwModal);
-forgotPwModalEl.addEventListener('click', (e)=>{ if(e.target === forgotPwModalEl) closeForgotPwModal(); });
-document.getElementById('forgotPwAnswerInput').addEventListener('keypress', (e)=>{
-  if(e.key === 'Enter') document.getElementById('forgotPwSubmitBtn').click();
-});
-document.getElementById('forgotPwSubmitBtn').addEventListener('click', async ()=>{
-  const err = document.getElementById('forgotPwError');
-  if(Date.now() < forgotCooldownUntil){
-    const s = Math.ceil((forgotCooldownUntil - Date.now()) / 1000);
-    err.textContent = tfmt('lockScreenTooManyTries', { s }); err.style.display = 'block';
-    return;
-  }
-  const answer = lkNormalizeAnswer(document.getElementById('forgotPwAnswerInput').value);
-  const hash = localStorage.getItem(LK_SQ_HASH), salt = localStorage.getItem(LK_SQ_SALT);
-  const ok = hash && salt && answer && await lkVerifySecret(answer, hash, salt);
-  if(ok){
-    forgotAttemptCount = 0;
-    try{ localStorage.removeItem(LK_F_ATTEMPTS); localStorage.removeItem(LK_F_COOLDOWN); }catch(e){}
-    closeForgotPwModal();
-    openLockPasswordModal('reset');
-  }else{
-    forgotAttemptCount++;
-    if(forgotAttemptCount >= 5){
-      forgotCooldownUntil = Date.now() + 30000;
-      forgotAttemptCount = 0;
-      try{ localStorage.setItem(LK_F_COOLDOWN, String(forgotCooldownUntil)); localStorage.removeItem(LK_F_ATTEMPTS); }catch(e){}
-      err.textContent = tfmt('lockScreenTooManyTries', { s: 30 }); err.style.display = 'block';
-    }else{
-      try{ localStorage.setItem(LK_F_ATTEMPTS, String(forgotAttemptCount)); }catch(e){}
-      err.textContent = L('forgotPwWrongErr'); err.style.display = 'block';
-    }
-  }
-});
-
-/* ============================================================
-   অ্যাপ লক চালু/বন্ধ — সেটিংস বাটনগুলোর হ্যান্ডলার
-   ============================================================ */
-document.getElementById('enableLockBtn').addEventListener('click', ()=> openLockPasswordModal('setup'));
-document.getElementById('changeLockPwBtn').addEventListener('click', ()=> openLockPasswordModal('change'));
-document.getElementById('changeSecurityQBtn').addEventListener('click', ()=>{
-  openLockPasswordModal('verify', ()=> openSecurityQModal('change'));
-});
-function performDisableLock(){
-  [LK_ENABLED, LK_PW_HASH, LK_PW_SALT, LK_SQ, LK_SQ_HASH, LK_SQ_SALT, LK_WEBAUTHN, LK_ACTIVITY,
-   LK_ATTEMPTS, LK_COOLDOWN, LK_F_ATTEMPTS, LK_F_COOLDOWN]
-    .forEach(k=>{ try{ localStorage.removeItem(k); }catch(e){} });
-  toast(L('lockDisabledToast'));
-  updateSettingsPrivacyUI();
-}
-document.getElementById('disableLockBtn').addEventListener('click', ()=>{
-  openLockPasswordModal('verify', ()=>{
-    openSimpleConfirm(L('disableLockConfirmMsg'), performDisableLock);
+buildKeypad();
+if(lockKeypadEl){
+  lockKeypadEl.addEventListener('click', (e)=>{
+    const b = e.target.closest('.pin-key'); if(!b) return;
+    if(b.disabled) return;
+    pressKey(b.dataset.k);
+    try{ navigator.vibrate && navigator.vibrate(6); }catch(_){}
   });
+}
+if(lockAltBtn){
+  lockAltBtn.addEventListener('click', ()=>{
+    if(lockMode === 'unlock'){
+      lockMode = 'forgot';
+      openSecurityQuestionFlow();
+    }
+  });
+}
+
+/* keyboard support */
+document.addEventListener('keydown', (e)=>{
+  if(!lockActive()) return;
+  if(document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  const k = e.key;
+  if(/^[0-9]$/.test(k)){ e.preventDefault(); pressKey(k); return; }
+  if(k === 'Backspace'){ e.preventDefault(); pressKey('back'); return; }
+  if(k === 'Enter'){ e.preventDefault(); if(lockMode === 'setup') pressKey('check'); return; }
+  if(k === 'Escape'){ clearHint(); return; }
 });
 
 /* ============================================================
-   Init — কোল্ড স্টার্টে লক স্ক্রিন ইতিমধ্যে দেখানো আছে (index.html এর
-   ইনলাইন স্ক্রিপ্ট দিয়ে, ডেটা-ফ্ল্যাশ এড়াতে) — এখানে শুধু বাকি সেটআপ
+   Cold start
    ============================================================ */
-if(isLockEnabled() && isCurrentlyLocked()) showLockScreen();
+if(isLockEnabled() && lockScreenEl && lockScreenEl.classList.contains('show')){
+  showLockScreen();
+}
 recordActivity();
 initIdleWatch();
+
+/* settings.js থেকে কল করার জন্য */
+window.updateSettingsPrivacyUI = updateSettingsPrivacyUI;

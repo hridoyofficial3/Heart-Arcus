@@ -11,6 +11,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>Arcus</title>
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="lock.css">
   <style>
 #dashAccGrid .acc-card .lbl{
   display: flex !important;
@@ -33,37 +34,50 @@
   height: 19px !important;
   stroke-width: 2 !important;
 }
-/* T11 #১৩: এখানে আগে `.acc-card:nth-child(1..4) .acc-ic`-এর পজিশন-ভিত্তিক রঙ ছিল — অ্যাকাউন্ট আর্কাইভ/যোগ হলে পজিশন বদলে ভুল রঙ বসত। এখন ড্যাশবোর্ড কার্ডের আইকন-রঙ render.js-এর `renderDashAccCards`-এ অ্যাকাউন্টের id/রঙ অনুযায়ী inline বসে (পজিশন নির্ভর নয়)। */
   </style>
 </head>
 <body>
 
-<!-- ================= APP LOCK SCREEN ================= -->
+<!-- ================= APP LOCK SCREEN (v2: PIN) ================= -->
 <div id="appLockScreen">
-  <div class="lock-box">
-    <div class="lock-icon" aria-hidden="true">
-      <svg viewBox="0 0 48 48" width="50" height="50" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" focusable="false">
-        <path d="M6 32V22a18 18 0 0 1 36 0v3"/>
-        <path d="M12 39V22a12 12 0 0 1 24 0v8"/>
-        <path d="M18 43V22a6 6 0 0 1 12 0v12"/>
-        <path d="M24 22v17"/>
-      </svg>
+  <div class="lock-shell" id="lockMain">
+    <div class="lock-top">
+      <div class="lock-eyebrow" id="lockEyebrow" data-i18n="lockLoginLabel">LOGIN</div>
+      <div class="lock-heading" id="lockHeading">Enter Your PIN</div>
+      <div class="lock-dots" id="lockDots" aria-live="polite"></div>
+      <div class="lock-hint" id="lockHint"></div>
     </div>
-    <h2 data-i18n="lockScreenTitle">Arcus লক করা আছে</h2>
-    <div class="settings-desc" data-i18n="lockScreenDesc">চালিয়ে যেতে পাসওয়ার্ড দাও।</div>
-    <input type="password" id="lockScreenPwInput" autocomplete="off" data-i18n-ph="lockScreenPwPh" placeholder="পাসওয়ার্ড" style="margin-top:16px;">
-    <div class="settings-desc warn" id="lockScreenError" style="display:none; margin-top:8px;"></div>
-    <button class="btn gold" id="lockScreenUnlockBtn" type="button" style="margin-top:14px; width:100%;" data-i18n="lockScreenUnlockBtn">আনলক করো</button>
-    <button class="btn outline" id="lockScreenFingerprintBtn" type="button" style="margin-top:10px; width:100%; display:none;" data-i18n="lockScreenFingerprintBtn">👆 ফিঙ্গারপ্রিন্ট দিয়ে আনলক করো</button>
-    <a href="javascript:void(0)" id="lockScreenForgotLink" class="lock-forgot-link" data-i18n="lockScreenForgotLink">পাসওয়ার্ড ভুলে গেছি</a>
+    <div class="lock-body">
+      <div class="lock-forgot" id="lockForgotRow">
+        <span class="lock-forgot-lbl" data-i18n="lockForgotPin">Forgot Your PIN?</span>
+        <button type="button" class="lock-alt" id="lockAltBtn" data-i18n="lockUsePassword">USE PASSWORD</button>
+      </div>
+      <div class="lock-keypad" id="lockKeypad"></div>
+      <div class="lock-version" id="lockVersion">Version v85</div>
+    </div>
   </div>
+  <div class="lock-shell" id="lockAltShell" hidden></div>
 </div>
 <script>
-/* Critical-path: show the lock overlay immediately, before the rest of the page
-   paints, so there's no flash of the app's data. The real unlock logic loads later
-   in privacy-lock.js. */
+/* Critical-path: theme প্রি-সেট + lock overlay দেখাও — যাতে ডেটা ফ্ল্যাশ না হয় */
 (function(){
   try{
+    var s = null;
+    try{ s = JSON.parse(localStorage.getItem('hisab_settings') || 'null'); }catch(_){}
+    var isDark = false;
+    if(s){
+      var mode = s.darkMode || 'light';
+      isDark = (mode === 'dark' || mode === 'black');
+      if(mode === 'system'){
+        isDark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      } else if(mode === 'custom'){
+        var darkBgs = ['night','aurora','midnight','ember','emerald','graphite'];
+        isDark = darkBgs.indexOf(s.customBg || 'day') >= 0;
+      }
+      document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+      if(mode === 'custom' && s.customBg) document.documentElement.setAttribute('data-bg', s.customBg);
+      document.documentElement.setAttribute('data-accent', s.accent || 'teal');
+    }
     if(localStorage.getItem('hisab_lock_enabled') === '1'){
       document.getElementById('appLockScreen').classList.add('show');
       document.body.classList.add('lock-active');
@@ -260,7 +274,7 @@
               <span class="slider"></span>
             </label>
           </div>
-          <div class="settings-desc" style="margin-top:10px;" data-i18n="dueRemWindowLabel">কত দিন আগে থেকে \"শিগগিরই\" দেখাবে</div>
+          <div class="settings-desc" style="margin-top:10px;" data-i18n="dueRemWindowLabel">কত দিন আগে থেকে "শিগগিরই" দেখাবে</div>
           <div class="seg" id="dueReminderDaysSeg" style="margin-top:6px;">
             <button type="button" data-days="1">১ দিন</button>
             <button type="button" data-days="3">৩ দিন</button>
@@ -336,7 +350,7 @@
             <div class="about-logo"><img src="icon-192.png" alt="Arcus" class="brand-img" width="40" height="40"></div>
             <div class="about-meta">
               <div class="about-name">Arcus</div>
-              <div class="about-ver" id="appVersionLabel">Version v82</div>
+              <div class="about-ver" id="appVersionLabel">Version v85</div>
             </div>
           </div>
           <div class="settings-desc" data-i18n="aboutLongDesc">ব্যক্তিগত আয়-ব্যয়, সেভিংস, দেনাপাওনা আর পরিকল্পনা — সবকিছু একসাথে গুছিয়ে রাখার জন্য বানানো একটা সহজ, নিরাপদ হিসাবের অ্যাপ।</div>
@@ -356,8 +370,6 @@
       </div>
     </div>
   </div>
-
-  <!-- (বাকি সব মোডাল — editModal, confirmModal, alertModal, resetAllConfirmModal, backupPasswordModal, settleLoanModal, settleDueModal, buyPlanModal, loanHistoryModal, loanHistoryDetailModal, allEntriesModal, entryDetailModal, selfLoanCardRepayModal, recurringPendingModal — আগের মতোই থাকবে, শুধু recurringPendingModal-এর ভেতরে অ্যাকাউন্ট সিলেক্টর যোগ হবে নিচে JS-এ) -->
 
   <div class="modal-overlay" id="editModal">
     <div class="modal-card">
@@ -448,26 +460,10 @@
     </div>
   </div>
 
-  <!-- ================= APP LOCK: password create/change/verify/reset modal ================= -->
-  <div class="modal-overlay" id="lockPasswordModal">
-    <div class="modal-card">
-      <div class="modal-header"><h3 id="lockPasswordTitle" data-i18n="lockSetupTitle">অ্যাপ লক পাসওয়ার্ড তৈরি করো</h3><button class="modal-close" id="lockPasswordCloseBtn">×</button></div>
-      <div class="settings-desc" id="lockPasswordDesc"></div>
-      <input type="password" id="lockCurrentPwInput" autocomplete="off" data-i18n-ph="lockCurrentPwPh" placeholder="বর্তমান পাসওয়ার্ড" style="margin-top:10px; display:none;">
-      <input type="password" id="lockNewPwInput" autocomplete="off" data-i18n-ph="lockNewPwPh" placeholder="নতুন পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)" style="margin-top:8px;">
-      <input type="password" id="lockConfirmPwInput" autocomplete="off" data-i18n-ph="lockConfirmPwPh" placeholder="নতুন পাসওয়ার্ড আবার লেখো" style="margin-top:8px;">
-      <div class="settings-desc warn" id="lockPasswordError" style="display:none; margin-top:6px;"></div>
-      <div class="modal-actions">
-        <button class="btn gold" id="lockPasswordSubmitBtn" style="width:100%;" data-i18n="lockSetupSaveBtn">সেভ করো ও চালু করো</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= APP LOCK: security question modal ================= -->
   <div class="modal-overlay" id="securityQModal">
     <div class="modal-card">
       <div class="modal-header"><h3 data-i18n="securityQTitle">সিকিউরিটি প্রশ্ন সেট করো</h3><button class="modal-close" id="securityQCloseBtn">×</button></div>
-      <div class="settings-desc" data-i18n="securityQDesc">পাসওয়ার্ড ভুলে গেলে এই প্রশ্নের উত্তর দিয়ে নতুন পাসওয়ার্ড সেট করা যাবে।</div>
+      <div class="settings-desc" data-i18n="securityQDesc">পিন ভুলে গেলে এই প্রশ্নের উত্তর দিয়ে নতুন পিন সেট করা যাবে।</div>
       <label style="margin-top:10px; display:block;" data-i18n="securityQSelectLabel">একটা প্রশ্ন বাছো</label>
       <select id="securityQSelect" style="margin-top:4px;">
         <option value="securityQ1" data-i18n="securityQ1">তোমার প্রিয় শিক্ষকের নাম কী?</option>
@@ -481,21 +477,6 @@
       <div class="settings-desc warn" id="securityQError" style="display:none; margin-top:6px;"></div>
       <div class="modal-actions">
         <button class="btn gold" id="securityQSaveBtn" style="width:100%;" data-i18n="securityQSaveBtn">সেভ করো</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- ================= APP LOCK: forgot password modal ================= -->
-  <div class="modal-overlay" id="forgotPwModal">
-    <div class="modal-card">
-      <div class="modal-header"><h3 data-i18n="forgotPwTitle">পাসওয়ার্ড রিসেট করো</h3><button class="modal-close" id="forgotPwCloseBtn">×</button></div>
-      <div class="settings-desc" data-i18n="forgotPwDesc">তোমার সিকিউরিটি প্রশ্নের উত্তর দাও:</div>
-      <div class="settings-desc" id="forgotPwQuestionText" style="margin-top:6px; font-weight:600;"></div>
-      <input type="text" id="forgotPwAnswerInput" autocomplete="off" data-i18n-ph="forgotPwAnswerPh" placeholder="উত্তর লেখো" style="margin-top:8px;">
-      <div class="settings-desc warn" id="forgotPwError" style="display:none; margin-top:6px;"></div>
-      <div class="modal-actions">
-        <button class="btn outline" id="forgotPwCancelBtn" data-i18n="forgotPwCancelBtn">ফিরে যাও</button>
-        <button class="btn gold" id="forgotPwSubmitBtn" data-i18n="forgotPwSubmitBtn">যাচাই করো</button>
       </div>
     </div>
   </div>
@@ -656,7 +637,6 @@
     <div class="tab" data-tab="summary" role="tab" tabindex="0" aria-selected="false"><svg class="tab-icon" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 21V10M11 21V4M18 21v-7"/></svg><span data-i18n="tabSummary">মাস শেষে</span></div>
   </div>
 
-  <!-- সব প্যানেল আগের মতোই থাকবে - শুধু panel-daily-এর উপরে acc-grid structure পরিবর্তন হবে না, JS দিয়ে render হবে -->
   <div class="panel active" id="panel-daily">
     <div class="total-bar">
       <span class="lbl" data-i18n="grandTotal">সর্বমোট (সেভিংস সহ)</span>
@@ -1023,6 +1003,7 @@
 
 
 <script src="i18n.js"></script>
+<script src="i18n-lock.js"></script>
 <script src="settings.js"></script>
 <script src="privacy-lock.js"></script>
 <script src="backup.js"></script>

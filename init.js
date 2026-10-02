@@ -16,3 +16,11 @@ document.addEventListener('visibilitychange', ()=>{
 });
 window.addEventListener('focus', ()=>{ refreshTodayDefaults(); if(typeof maybeNotifyDueReminders === 'function') maybeNotifyDueReminders(); });
 if(typeof maybeNotifyDueReminders === 'function') maybeNotifyDueReminders();
+
+/* লোগো চেপে ধরলে "Copy/Download image" মেনু আসা বন্ধ */
+document.addEventListener('contextmenu', e=>{
+  if(e.target && e.target.tagName === 'IMG') e.preventDefault();
+});
+document.addEventListener('dragstart', e=>{
+  if(e.target && e.target.tagName === 'IMG') e.preventDefault();
+});

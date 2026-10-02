@@ -80,7 +80,6 @@ const dict = {
     budgetTitleFmt:"প্রয়োজনীয় / ঐচ্ছিক বাজেট ({need}/{want})",
     needPctLabelFmt:"প্রয়োজনীয় ব্যয় (আয়ের {pct}%)",
     wantPctLabelFmt:"ঐচ্ছিক ব্যয় (আয়ের {pct}%)",
-    
     amountLabel:"টাকার পরিমাণ", accountLabel:"হিসাব", dateLabel:"তারিখ", noteLabel:"বিবরণ",
     addEntryBtn:"লেনদেন যুক্ত করুন", transferTitle:"হিসাব স্থানান্তর", transferFrom:"উৎস হিসাব",
     transferTo:"গন্তব্য হিসাব", transferAmountLabel:"পরিমাণ (টাকা)", transferNoteLabel:"বিবরণ (ঐচ্ছিক)", transferBtn:"স্থানান্তর করুন", recentEntries:"সাম্প্রতিক লেনদেন",
@@ -105,7 +104,7 @@ const dict = {
     periodDay:"দিন", periodWeek:"সপ্তাহ", periodAll:"সম্পূর্ণ", periodAllLabel:"সব সময়ের সম্পূর্ণ হিসাব",
     periodAllChartLabel:"সর্বমোট", entryListTitleAll:"সকল লেনদেন সমূহ",
     entryListTitleDay:"আজকের লেনদেন সমূহ", entryListTitleWeek:"এই সপ্তাহের লেনদেন সমূহ",
-    totalIncome:"মোট আয়", totalExpense:"মোট ব্যয়", balance:"বর্তমান ব্যালেন্স", totalSavingsLabel:"মোট সেভিংস", 
+    totalIncome:"মোট আয়", totalExpense:"মোট ব্যয়", totalSavingsLabel:"মোট সেভিংস", 
     monthlyChartTitle:"আয়-ব্যয়ের প্রবণতা (গত ৬ মাস)",
     monthlyChartTitleDay:"আয়-ব্যয়ের প্রবণতা (গত ৬ দিন)",
     monthlyChartTitleWeek:"আয়-ব্যয়ের প্রবণতা (গত ৬ সপ্তাহ)",
@@ -364,7 +363,7 @@ const dict = {
     recurringInsufficientBalance:"এই অ্যাকাউন্টে যথেষ্ট টাকা নেই, তাই এই নিয়মিত লেনদেনটি যোগ করা যায়নি।",
     recurringPeriodFmt:"{month} {year}",
      themeColorLabel:"রঙের থিম", themeTeal:"টিল", themeOcean:"ওশান", themeViolet:"রয়্যাল", themeEmerald:"এমারেল্ড", themeAmber:"সানসেট", themeRose:"রোজ", themeGraphite:"গ্রাফাইট", themeMocha:"মোকা",
-     noteSugIncome:"আয়ের বিবরণ", noteSugExpense:"ব্যয়ের বিবরণ", noteSugAdd:"যোগ করো", noteSugEmpty:"নিচের + চেপে নতুন নাম যোগ করো", noteSugNew:"নতুন নাম যোগ করো", noteSugNamePh:"নাম লিখুন", noteSugSave:"সেভ", noteSugNone:"কোনোটি নয়", noteSugRemove:"মুছে ফেলো",
+     noteSugEmpty:"নিচের + চেপে নতুন নাম যোগ করো", noteSugNew:"নতুন নাম যোগ করো", noteSugNamePh:"নাম লিখুন", noteSugSave:"সেভ", noteSugNone:"কোনোটি নয়", noteSugRemove:"মুছে ফেলো",
     darkModeLabel:"থিম",
     darkModeSystem:"সিস্টেম", darkModeLight:"লাইট", darkModeDark:"ডার্ক", darkModeBlack:"ব্ল্যাক",
     darkModeDesc:"সিস্টেম সিলেক্ট করলে ফোনের সেটিং অনুযায়ী নিজে থেকেই বদলে যাবে। \"ব্ল্যাক\" একদম কালো ব্যাকগ্রাউন্ডের থিম।",
@@ -379,20 +378,18 @@ const dict = {
     fingerprintEnableFailToast:"ফিঙ্গারপ্রিন্ট চালু করা যায়নি। আবার চেষ্টা করো।",
     fingerprintEnabledToast:"ফিঙ্গারপ্রিন্ট আনলক চালু হলো।",
     fingerprintDisabledToast:"ফিঙ্গারপ্রিন্ট আনলক বন্ধ হলো।",
-    lockSetupTitle:"অ্যাপ লক পাসওয়ার্ড তৈরি করো",
-    lockChangeTitle:"পাসওয়ার্ড পরিবর্তন করো",
-    lockResetTitle:"নতুন পাসওয়ার্ড দাও",
-    lockVerifyTitle:"পাসওয়ার্ড দাও",
-    lockCurrentPwPh:"বর্তমান পাসওয়ার্ড",
-    lockNewPwPh:"নতুন পাসওয়ার্ড (কমপক্ষে ৪ অক্ষর)",
-    lockConfirmPwPh:"নতুন পাসওয়ার্ড আবার লেখো",
-    lockPwMismatchErr:"দুটো পাসওয়ার্ড মিলছে না।",
-    lockPwTooShortErr:"পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে।",
-    lockCurrentPwWrongErr:"বর্তমান পাসওয়ার্ড ভুল হয়েছে।",
-    lockSetupSaveBtn:"সেভ করো ও চালু করো",
-    lockChangeSaveBtn:"পরিবর্তন করো",
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     lockVerifyContinueBtn:"এগিয়ে যাও",
-    lockPwSetToast:"অ্যাপ লক চালু হলো।",
     lockPwChangedToast:"পাসওয়ার্ড পরিবর্তন হয়েছে।",
     lockDisabledToast:"অ্যাপ লক বন্ধ হয়ে গেছে।",
     disableLockConfirmMsg:"সত্যিই অ্যাপ লক বন্ধ করবে? তাহলে পাসওয়ার্ড ছাড়াই যে কেউ অ্যাপ খুলতে পারবে।",
@@ -409,17 +406,15 @@ const dict = {
     securityQSaveBtn:"সেভ করো",
     securityQRequiredErr:"প্রশ্ন ও উত্তর দুটোই দিতে হবে।",
     securityQSavedToast:"সিকিউরিটি প্রশ্ন সেভ হয়েছে।",
-    lockScreenTitle:"Arcus লক করা আছে",
-    lockScreenDesc:"চালিয়ে যেতে পাসওয়ার্ড দাও।",
-    lockScreenPwPh:"পাসওয়ার্ড",
-    lockScreenUnlockBtn:"আনলক করো",
-    lockScreenWrongPwErr:"পাসওয়ার্ড ভুল হয়েছে।",
-    lockScreenForgotLink:"পাসওয়ার্ড ভুলে গেছি",
-    lockScreenFingerprintBtn:"ফিঙ্গারপ্রিন্ট দিয়ে আনলক করো",
-    lockScreenFingerprintFail:"ফিঙ্গারপ্রিন্ট মেলেনি, পাসওয়ার্ড দাও।",
+    
+    
+    
+    
+    
+    
+    
     lockScreenTooManyTries:"অনেকবার ভুল হয়েছে — {s} সেকেন্ড পর আবার চেষ্টা করো।",
     forgotPwTitle:"পাসওয়ার্ড রিসেট করো",
-    forgotPwDesc:"তোমার সিকিউরিটি প্রশ্নের উত্তর দাও:",
     forgotPwAnswerPh:"উত্তর লেখো",
     forgotPwSubmitBtn:"যাচাই করো",
     forgotPwWrongErr:"উত্তর মিলছে না।",
@@ -504,7 +499,6 @@ const dict = {
     budgetTitleFmt:"Need/Want Budget ({need}/{want})",
     needPctLabelFmt:"Need ({pct}% of income)",
     wantPctLabelFmt:"Want ({pct}% of income)",
-    
     amountLabel:"Amount", accountLabel:"Account", dateLabel:"Date", noteLabel:"Note",
     addEntryBtn:"Add Transaction", transferTitle:"Transfer Between Accounts", transferFrom:"From",
     transferTo:"To", transferAmountLabel:"Amount", transferNoteLabel:"Note (optional)", transferBtn:"Transfer", recentEntries:"Recent Transactions",
@@ -529,7 +523,7 @@ const dict = {
     periodDay:"Daily", periodWeek:"Weekly", periodAll:"All Time", periodAllLabel:"Complete all-time summary",
     periodAllChartLabel:"All Time", entryListTitleAll:"All Transactions",
     entryListTitleDay:"Today's Transactions", entryListTitleWeek:"This Week's Transactions",
-    totalIncome:"Total Income", totalExpense:"Total Expense", balance:"Current Balance", totalSavingsLabel:"Total Savings", 
+    totalIncome:"Total Income", totalExpense:"Total Expense", totalSavingsLabel:"Total Savings", 
     monthlyChartTitle:"Income vs Expense (Last 6 Months)",
     monthlyChartTitleDay:"Income vs Expense (Last 6 Days)",
     monthlyChartTitleWeek:"Income vs Expense (Last 6 Weeks)",
@@ -788,7 +782,7 @@ const dict = {
     recurringInsufficientBalance:"This account doesn't have enough money.",
     recurringPeriodFmt:"{month} {year}",
      themeColorLabel:"Color theme", themeTeal:"Teal", themeOcean:"Ocean", themeViolet:"Royal", themeEmerald:"Emerald", themeAmber:"Sunset", themeRose:"Rose", themeGraphite:"Graphite", themeMocha:"Mocha",
-     noteSugIncome:"Income notes", noteSugExpense:"Expense notes", noteSugAdd:"Add", noteSugEmpty:"Tap + below to add a new name", noteSugNew:"Add new name", noteSugNamePh:"Enter a name", noteSugSave:"Save", noteSugNone:"None", noteSugRemove:"Remove",
+     noteSugEmpty:"Tap + below to add a new name", noteSugNew:"Add new name", noteSugNamePh:"Enter a name", noteSugSave:"Save", noteSugNone:"None", noteSugRemove:"Remove",
     darkModeLabel:"Theme",
     darkModeSystem:"System", darkModeLight:"Light", darkModeDark:"Dark", darkModeBlack:"Black",
     darkModeDesc:"Select System to follow your device's settings automatically. \"Black\" is a pure black background theme.",
@@ -803,20 +797,18 @@ const dict = {
     fingerprintEnableFailToast:"Couldn't turn on fingerprint unlock. Try again.",
     fingerprintEnabledToast:"Fingerprint unlock is on.",
     fingerprintDisabledToast:"Fingerprint unlock is off.",
-    lockSetupTitle:"Create an App Lock Password",
-    lockChangeTitle:"Change Password",
-    lockResetTitle:"Set a New Password",
-    lockVerifyTitle:"Enter Password",
-    lockCurrentPwPh:"Current password",
-    lockNewPwPh:"New password (at least 4 characters)",
-    lockConfirmPwPh:"Re-enter new password",
-    lockPwMismatchErr:"The two passwords don't match.",
-    lockPwTooShortErr:"Password must be at least 4 characters.",
-    lockCurrentPwWrongErr:"Current password is incorrect.",
-    lockSetupSaveBtn:"Save & Turn On",
-    lockChangeSaveBtn:"Change",
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
     lockVerifyContinueBtn:"Continue",
-    lockPwSetToast:"App Lock turned on.",
     lockPwChangedToast:"Password changed.",
     lockDisabledToast:"App Lock turned off.",
     disableLockConfirmMsg:"Really turn off App Lock? Anyone will be able to open the app without a password.",
@@ -833,17 +825,15 @@ const dict = {
     securityQSaveBtn:"Save",
     securityQRequiredErr:"Both a question and an answer are required.",
     securityQSavedToast:"Security question saved.",
-    lockScreenTitle:"Arcus is locked",
-    lockScreenDesc:"Enter your password to continue.",
-    lockScreenPwPh:"Password",
-    lockScreenUnlockBtn:"Unlock",
-    lockScreenWrongPwErr:"Wrong password.",
-    lockScreenForgotLink:"Forgot password",
-    lockScreenFingerprintBtn:"Unlock with Fingerprint",
-    lockScreenFingerprintFail:"Fingerprint didn't match, enter your password.",
+    
+    
+    
+    
+    
+    
+    
     lockScreenTooManyTries:"Too many wrong tries — try again in {s}s.",
     forgotPwTitle:"Reset Password",
-    forgotPwDesc:"Answer your security question:",
     forgotPwAnswerPh:"Write the answer",
     forgotPwSubmitBtn:"Verify",
     forgotPwWrongErr:"That answer doesn't match.",

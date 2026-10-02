@@ -1,0 +1,188 @@
+/* ============================================================
+   lock.css — App Lock v2 (Neumorphic PIN screen)
+   Loaded AFTER style.css, so its rules win by cascade order.
+   ============================================================ */
+
+#appLockScreen{
+  --lk-top-1:#F59E0B;
+  --lk-top-2:#EA8C00;
+  --lk-bg:#0F0F0F;
+  --lk-key-bg:#151515;
+  --lk-key-txt:#FFFFFF;
+  --lk-dot-bg:rgba(255,255,255,.26);
+  --lk-dot-bd:rgba(255,255,255,.5);
+  --lk-muted:#8A8A8A;
+  --lk-lbl:#B0B0B0;
+  --lk-sh-1:6px 6px 14px rgba(0,0,0,.6);
+  --lk-sh-2:-3px -3px 8px rgba(255,255,255,.045);
+  display:none; position:fixed; inset:0; z-index:99999;
+  background:var(--lk-bg); overflow:hidden;
+  color:var(--lk-key-txt);
+  -webkit-tap-highlight-color:transparent;
+  align-items:stretch; justify-content:stretch;
+}
+#appLockScreen.show{ display:block; }
+body.lock-active{ overflow:hidden; }
+
+/* ---------- Light theme (light blue top + light gray bottom) ---------- */
+html[data-theme="light"] #appLockScreen{
+  --lk-top-1:#60A5FA;
+  --lk-top-2:#3B82F6;
+  --lk-bg:#EDF0F5;
+  --lk-key-bg:#EDF0F5;
+  --lk-key-txt:#1E2A3A;
+  --lk-dot-bg:rgba(255,255,255,.5);
+  --lk-dot-bd:rgba(255,255,255,.9);
+  --lk-muted:#8A96A8;
+  --lk-lbl:#5A6478;
+  --lk-sh-1:6px 6px 12px rgba(163,177,198,.6);
+  --lk-sh-2:-6px -6px 12px rgba(255,255,255,.95);
+}
+html[data-theme="light"] #appLockScreen .lock-hint{ color:#3B82F6; }
+html[data-theme="light"] #appLockScreen .lock-hint.warn{ color:#DC2626; }
+
+.lock-shell{ position:absolute; inset:0; display:flex; flex-direction:column; overflow:hidden; }
+.lock-shell[hidden]{ display:none !important; }
+
+.lock-top{
+  background:linear-gradient(180deg,var(--lk-top-1),var(--lk-top-2));
+  padding:calc(52px + env(safe-area-inset-top,0px)) 24px 46px;
+  text-align:center; color:#fff;
+  border-radius:0 0 38px 38px;
+  flex-shrink:0; position:relative; z-index:1;
+}
+.lock-eyebrow{ font-size:11px; font-weight:700; letter-spacing:3.2px; opacity:.82; margin-bottom:16px; }
+.lock-heading{ font-size:15.5px; font-weight:500; opacity:.96; letter-spacing:.2px; margin-bottom:24px; }
+.lock-dots{ display:flex; justify-content:center; gap:14px; min-height:16px; }
+.pin-dot{
+  width:14px; height:14px; border-radius:50%;
+  background:var(--lk-dot-bg); border:1.6px solid var(--lk-dot-bd);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1), background .18s, border-color .18s;
+}
+.pin-dot.filled{ background:#fff; border-color:#fff; transform:scale(1.15); }
+.lock-dots.error .pin-dot{ background:#EF4444 !important; border-color:#EF4444 !important; transform:none; }
+.lock-dots.shake{ animation:pinShake .46s; }
+@keyframes pinShake{
+  0%,100%{ transform:translateX(0); }
+  18%{ transform:translateX(-10px); }
+  38%{ transform:translateX(10px); }
+  58%{ transform:translateX(-6px); }
+  78%{ transform:translateX(6px); }
+}
+.lock-hint{
+  margin-top:14px; min-height:16px; font-size:12.5px; font-weight:600;
+  color:rgba(255,255,255,.95); letter-spacing:.1px; transition:color .2s;
+}
+.lock-hint.warn{ color:#FFD0D0; }
+.lock-hint.alt{ margin-top:0; text-align:center; color:var(--lk-lbl); }
+.lock-hint.alt.warn{ color:#EF4444; }
+
+.lock-body{
+  flex:1; min-height:0; display:flex; flex-direction:column;
+  background:var(--lk-bg); margin-top:-22px;
+  border-radius:38px 38px 0 0;
+  padding:34px 22px calc(20px + env(safe-area-inset-bottom,0px));
+  position:relative; z-index:2;
+  overflow-y:auto; overscroll-behavior:contain;
+}
+
+.lock-forgot{
+  text-align:center; margin-bottom:22px;
+  display:flex; flex-direction:column; align-items:center; gap:8px;
+}
+.lock-forgot[hidden], .lock-forgot.hidden{ display:none !important; }
+.lock-forgot-lbl{ font-size:12px; color:var(--lk-muted); }
+.lock-alt{
+  background:none; border:none; padding:3px 6px; cursor:pointer;
+  font-family:inherit; font-size:12.5px; font-weight:800;
+  letter-spacing:1.6px; color:var(--lk-key-txt);
+  border-bottom:1.5px solid currentColor; line-height:1.4;
+  -webkit-tap-highlight-color:transparent;
+}
+.lock-alt:active{ opacity:.7; }
+
+.lock-keypad{
+  display:grid; grid-template-columns:repeat(3,1fr);
+  gap:18px 22px; max-width:300px; width:100%;
+  margin:0 auto; padding:0 6px;
+}
+.pin-key{
+  aspect-ratio:1/1; border-radius:50%; border:none; cursor:pointer;
+  font-family:inherit; font-size:26px; font-weight:600; letter-spacing:.5px;
+  color:var(--lk-key-txt); background:var(--lk-key-bg);
+  display:flex; align-items:center; justify-content:center;
+  box-shadow:var(--lk-sh-1), var(--lk-sh-2);
+  transition:transform .12s, box-shadow .18s, opacity .2s;
+  -webkit-tap-highlight-color:transparent;
+  user-select:none;
+}
+.pin-key:active, .pin-key.pressed{
+  transform:scale(.94);
+  box-shadow:inset 5px 5px 9px rgba(0,0,0,.28), inset -3px -3px 7px rgba(255,255,255,.05);
+}
+html[data-theme="light"] .pin-key:active, html[data-theme="light"] .pin-key.pressed{
+  box-shadow:inset 5px 5px 9px rgba(163,177,198,.75), inset -5px -5px 9px rgba(255,255,255,.95);
+}
+.pin-key:disabled{ opacity:.32; pointer-events:none; }
+.pin-key.pin-special{ background:transparent; box-shadow:none; color:var(--lk-key-txt); }
+.pin-key.pin-special:active{ background:var(--lk-key-bg); box-shadow:var(--lk-sh-1), var(--lk-sh-2); transform:scale(.9); }
+.pin-key.pin-special.hidden{ visibility:hidden; pointer-events:none; }
+.pin-key svg{ width:28px; height:28px; }
+.pin-key.pin-back svg{ width:26px; height:26px; }
+
+.lock-version{
+  display:none !important;
+  margin-top:auto; padding-top:26px; padding-bottom:6px;
+  text-align:center; font-size:10.5px; color:var(--lk-muted); letter-spacing:.5px;
+}
+
+/* ---------- Alt screens (migration / security question) ---------- */
+.lock-shell-inner{ display:flex; flex-direction:column; height:100%; }
+.lock-pw-form{
+  max-width:340px; margin:14px auto 0; width:100%;
+  display:flex; flex-direction:column; gap:14px;
+}
+.lock-pw-form input{
+  width:100%; min-height:54px; padding:14px 18px; font-size:16px;
+  border-radius:18px; border:1.5px solid transparent;
+  background:var(--lk-key-bg); color:var(--lk-key-txt);
+  box-shadow:inset 4px 4px 9px rgba(0,0,0,.25), inset -3px -3px 7px rgba(255,255,255,.04);
+  outline:none; font-family:inherit;
+}
+html[data-theme="light"] .lock-pw-form input{
+  box-shadow:inset 4px 4px 9px rgba(163,177,198,.65), inset -4px -4px 9px rgba(255,255,255,.9);
+}
+.lock-pw-form input:focus{ border-color:var(--lk-top-1); }
+.lock-pw-form .lock-btn{
+  min-height:54px; padding:14px; border-radius:18px; border:none; cursor:pointer;
+  font-family:inherit; font-size:15px; font-weight:800; letter-spacing:.4px;
+  color:#fff;
+  background:linear-gradient(135deg,var(--lk-top-1),var(--lk-top-2));
+  box-shadow:0 14px 26px -12px rgba(0,0,0,.5);
+  transition:transform .12s;
+}
+.lock-pw-form .lock-btn:active{ transform:scale(.98); }
+.lock-pw-form .lock-btn.ghost{
+  background:transparent; color:var(--lk-key-txt); box-shadow:none;
+  border:1.5px solid var(--lk-lbl);
+}
+.lock-pw-form .lock-sq{
+  font-size:13.5px; line-height:1.6; color:var(--lk-lbl);
+  text-align:center; margin-bottom:2px; font-weight:600;
+}
+
+/* ---------- পুরনো এলিমেন্ট (থাকলে) লুকাও ---------- */
+/* ---------- Bengali: letter-spacing যুক্তাক্ষর/মাত্রা ভেঙে দেয়, তাই বাংলায় বন্ধ ---------- */
+html[lang="bn"] #appLockScreen,
+html[lang="bn"] #appLockScreen *{
+  letter-spacing:0 !important;
+  text-transform:none !important;
+  font-family:'Hind Siliguri','Noto Sans Bengali','Kohinoor Bangla','Inter',sans-serif;
+  font-kerning:normal;
+  text-rendering:optimizeLegibility;
+}
+html[lang="bn"] #appLockScreen .lock-eyebrow{ font-size:15px; font-weight:600; line-height:1.5; margin-bottom:14px; }
+html[lang="bn"] #appLockScreen .lock-heading{ font-size:20px; font-weight:600; line-height:1.5; }
+html[lang="bn"] #appLockScreen .lock-forgot-lbl{ font-size:14px; line-height:1.6; }
+html[lang="bn"] #appLockScreen .lock-alt{ font-size:15px; font-weight:600; line-height:1.7; }
+html[lang="bn"] #appLockScreen .pin-key{ font-family:'Inter','Hind Siliguri',sans-serif; }
