@@ -1,15 +1,71 @@
 /* ============================================================
    Dark Mode
    ============================================================ */
+/* ---------- কাস্টমস মোড: ব্যাকগ্রাউন্ড তালিকা ----------
+   tone = এই ব্যাকগ্রাউন্ডে অ্যাপ লাইট না ডার্ক থিমে চলবে */
+const BACKGROUNDS = [
+  { id:'day',      tone:'light', n:'bgDay' },
+  { id:'pearl',    tone:'light', n:'bgPearl' },
+  { id:'mint',     tone:'light', n:'bgMint' },
+  { id:'sunrise',  tone:'light', n:'bgSunrise' },
+  { id:'night',    tone:'dark',  n:'bgNight' },
+  { id:'aurora',   tone:'dark',  n:'bgAurora' },
+  { id:'midnight', tone:'dark',  n:'bgMidnight' },
+  { id:'ember',    tone:'dark',  n:'bgEmber' },
+  { id:'emerald',  tone:'dark',  n:'bgEmerald' },
+  { id:'graphite', tone:'dark',  n:'bgGraphite' }
+];
+function bgInfo(id){ return BACKGROUNDS.find(b=> b.id === id) || null; }
+function renderBgPicker(){
+  const box = document.getElementById('bgGalleryBox'), grid = document.getElementById('bgGrid');
+  if(!box || !grid) return;
+  const isCustom = ((settings && settings.darkMode) || 'light') === 'custom';
+  box.hidden = !isCustom;
+  const sun = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>';
+  const moon = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>';
+  if(!grid.dataset.ready){
+    grid.innerHTML = BACKGROUNDS.map(b=>
+      '<button type="button" class="bg-tile" data-id="'+b.id+'" aria-pressed="false">'+
+        '<span class="bg-prev" style="background-image:url(\'backgrounds/thumb-'+b.id+'.jpg\')"></span>'+
+        '<span class="bg-tone">'+(b.tone === 'light' ? sun : moon)+'</span>'+
+        '<span class="bg-check"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7.5"/></svg></span>'+
+        '<span class="bg-name" data-i18n="'+b.n+'">'+(typeof L === 'function' ? L(b.n) : b.id)+'</span></button>'
+    ).join('');
+    grid.dataset.ready = '1';
+    grid.addEventListener('click', e=>{
+      const t = e.target.closest('.bg-tile'); if(!t) return;
+      settings.darkMode = 'custom';
+      settings.customBg = t.dataset.id;
+      saveSettings();
+      applyDarkMode();
+      try{ navigator.vibrate && navigator.vibrate(8); }catch(_){}
+    });
+  }
+  const cur = (settings && settings.customBg) || '';
+  grid.querySelectorAll('.bg-tile').forEach(t=>{
+    const on = isCustom && t.dataset.id === cur;
+    t.classList.toggle('on', on); t.setAttribute('aria-pressed', on);
+  });
+}
+
 function applyDarkMode(){
   const mode = (settings && settings.darkMode) || 'light';
-  let effective;
-  if(mode === 'system'){
+  let effective, bg = null;
+  if(mode === 'custom'){
+    bg = bgInfo(settings && settings.customBg) || bgInfo('day');
+    effective = bg.tone;
+  } else if(mode === 'system'){
     effective = (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light';
   } else {
     effective = mode;
   }
   document.documentElement.setAttribute('data-theme', effective);
+  if(bg) document.documentElement.setAttribute('data-bg', bg.id); else document.documentElement.removeAttribute('data-bg');
+  document.documentElement.setAttribute('data-accent', (settings && settings.accent) || 'teal');
+  try{ renderThemePicker(); }catch(e){}
+  try{ renderBgPicker(); }catch(e){}
+  // থিম বদলালে ড্যাশবোর্ড অ্যাকাউন্ট-আইকনের রং আবার হিসাব করো
+  try{ if(typeof renderBalances === 'function' && document.getElementById('dashAccGrid')) renderBalances(); }catch(e){}
   // Update theme-color meta
   const meta = document.querySelector('meta[name="theme-color"]');
   if(meta) meta.content = effective === 'black' ? '#000000' : (effective === 'dark' ? '#0a1f1a' : '#1F5C4F');
@@ -376,6 +432,7 @@ document.querySelectorAll('.langBtn').forEach(b=>{
 document.querySelectorAll('.darkModeBtn').forEach(b=>{
   b.addEventListener('click', ()=>{
     settings.darkMode = b.dataset.mode;
+    if(b.dataset.mode === 'custom' && !bgInfo(settings.customBg)) settings.customBg = (document.documentElement.getAttribute('data-theme') === 'light') ? 'day' : 'night';
     saveSettings();
     applyDarkMode();
   });
@@ -452,3 +509,43 @@ document.getElementById('resetAllConfirmOkBtn').addEventListener('click', ()=>{
 });
 document.getElementById('resetAllBtn').addEventListener('click', openResetAllConfirmModal);
 
+
+/* ============================================================
+   Color themes
+   ============================================================ */
+const ACCENTS = [
+  { k:'teal',     n:'themeTeal',     c1:'#14B8A6', c2:'#0F766E' },
+  { k:'ocean',    n:'themeOcean',    c1:'#3B82F6', c2:'#1D4ED8' },
+  { k:'violet',   n:'themeViolet',   c1:'#8B5CF6', c2:'#6D28D9' },
+  { k:'emerald',  n:'themeEmerald',  c1:'#22C55E', c2:'#15803D' },
+  { k:'amber',    n:'themeAmber',    c1:'#F59E0B', c2:'#B45309' },
+  { k:'rose',     n:'themeRose',     c1:'#EC4899', c2:'#BE185D' },
+  { k:'graphite', n:'themeGraphite', c1:'#64748B', c2:'#334155' },
+  { k:'mocha',    n:'themeMocha',    c1:'#B9835A', c2:'#7C4A2D' }
+];
+function renderThemePicker(){
+  const box = document.getElementById('themeColors');
+  if(!box) return;
+  const cur = (settings && settings.accent) || 'teal';
+  if(!box.dataset.ready){
+    box.innerHTML = ACCENTS.map(a=>
+      '<button type="button" class="tc-swatch" data-k="'+a.k+'" style="--c1:'+a.c1+';--c2:'+a.c2+';">'+
+        '<span class="tc-prev"><span class="tc-hero"></span><span class="tc-row"><i></i><i></i><i></i></span></span>'+
+        '<span class="tc-meta"><span class="tc-name" data-i18n="'+a.n+'">'+(typeof L==='function' ? L(a.n) : a.k)+'</span>'+
+        '<span class="tc-dot"><svg viewBox="0 0 24 24" aria-hidden="true"><polyline points="5 12.5 10 17.5 19 7.5"/></svg></span></span></button>'
+    ).join('');
+    box.dataset.ready = '1';
+    box.addEventListener('click', e=>{
+      const b = e.target.closest('.tc-swatch'); if(!b) return;
+      settings.accent = b.dataset.k;
+      saveSettings();
+      applyDarkMode();
+      try{ navigator.vibrate && navigator.vibrate(8); }catch(_){}
+    });
+  }
+  box.querySelectorAll('.tc-swatch').forEach(b=>{
+    const on = b.dataset.k === cur;
+    b.classList.toggle('on', on);
+    b.setAttribute('aria-pressed', on);
+  });
+}

@@ -31,6 +31,7 @@ function findPair(en){
 function entryActionsHtml(en){
   if(isLoanDueEntry(en)) return '';
   if(en.savingsReattribFrom) return '';
+  if(isAutoSavingsEntry(en)) return '';
   if(canEditEntry(en)){ return '<button class="edit-icon" title="edit" onclick="event.stopPropagation(); openEditEntry('+Number(en.id)+')" onkeydown="event.stopPropagation()">✎</button>'; }
   return '';
 }
@@ -370,7 +371,7 @@ const ACC_SVG = {
   '🏦':'<path d="M3 21h18"/><path d="M5 21V10M9.5 21V10M14.5 21V10M19 21V10"/><path d="M12 3l9 5.5H3L12 3z"/>',
   '📱':'<rect x="7" y="2.5" width="10" height="19" rx="2.2"/><path d="M11 18h2"/>',
   '🏆':'<path d="M8 21h8M12 17v4"/><path d="M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M7 6H4v1a3 3 0 0 0 3 3M17 6h3v1a3 3 0 0 1-3 3"/>',
-  '🐷':'<path d="M4 12c0-1 .5-2 1.5-2.8C6.2 6 9 4 13 4c3 0 4.5 1.2 5.3 2.2.3.4.8.6 1.3.6.8 0 1.4.6 1.4 1.4v1.6l-2 .7"/><path d="M4 12v4c0 1.7 1.8 2.6 3.2 3.1.5.2.8.6.8 1.1V21h7v-1.3c0-.5.3-.9.8-1.1.9-.3 1.9-.8 2.6-1.4"/><circle cx="15" cy="9" r=".6" fill="currentColor" stroke="none"/>',
+  '🐷':'<path d="M19 5c-1.5 0-2.8 1.4-3 2-3.5-1.5-11-.3-11 5 0 1.8 0 3 2 4.5V20h4v-2h3v2h4v-4c1-.5 1.7-1 2-2h2v-4h-2c0-1-.5-1.5-1-2V5z"/><path d="M2 9v1c0 1.1.9 2 2 2h1"/><path d="M16 11h.01"/>',
   '💰':'<path d="M19 7V4a1 1 0 0 0-1-1H5a2 2 0 0 0 0 4h15a1 1 0 0 1 1 1v4h-3a2 2 0 0 0 0 4h3a1 1 0 0 0 1-1v-2a1 1 0 0 0-1-1"/><path d="M3 5v14a2 2 0 0 0 2 2h15a1 1 0 0 0 1-1v-4"/>',
   '💳':'<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/>',
   '🏧':'<rect x="3" y="3" width="18" height="18" rx="2.5"/><rect x="7" y="7" width="10" height="5" rx="1"/><path d="M8 16.5h8"/>',
@@ -435,8 +436,8 @@ function renderAccountsList(){
   wrap.innerHTML = accs.map(a=>{
     const st = accountRowState(a);
     let actions = '';
-    if(st === 'delete') actions = accBtnHtml('del', a.id, 'del', L('accDeleteTitle'), '🗑️');
-    else if(st === 'archive') actions = accBtnHtml('archive', a.id, 'arch', L('accArchiveTitle'), '📦');
+    if(st === 'delete') actions = accBtnHtml('del', a.id, 'del', L('accDeleteTitle'), '<svg class="acc-svg ui-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6M10 11v6M14 11v6"/></svg>');
+    else if(st === 'archive') actions = accBtnHtml('archive', a.id, 'arch', L('accArchiveTitle'), '<svg class="acc-svg ui-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="3" width="20" height="5" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8M10 12h4"/></svg>');
     else if(st === 'transfer') actions = accBtnHtml('transfer', a.id, 'txt', L('accTransferFirstBtn'), escapeHtml(L('accTransferFirstBtn')));
     return accountRowHtml(a, actions);
   }).join('');
@@ -564,7 +565,7 @@ function renderDashAccCards(){
     savings: isDark ? '#5A4418' : '#F5E6C0'
   };
   const iconBox = (bg, color, svgHtml) =>
-    '<span style="display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;border-radius:12px;background:'+bg+';color:'+color+';margin-right:10px;flex-shrink:0;">'+svgHtml+'</span>';
+    '<span style="display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:10px;background:'+bg+';color:'+color+';margin-right:8px;flex-shrink:0;">'+svgHtml+'</span>';
   let cardsHtml = accs.map(a=>{
     const label = escapeHtml(a.i18n ? L(a.name) : a.name);
     const color = safeCssColor(a.color);
@@ -635,7 +636,7 @@ function renderEntryList(){
   list.innerHTML = shown.map(en => `
     <div class="entry ${en.transfer ? '' : (en.type==='income' ? 'income-bg' : 'expense-bg')}" onclick="openEntryDetail(${Number(en.id)})" role="button" tabindex="0">
       <div class="left">
-        <span class="tag"><span class="accbadge">${accLabel(en.account)}</span>${(en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):''}${escapeHtml(en.date)}${en.note ? ' · ' + escapeHtml(en.note) : ''}</span>
+        <span class="tag"><span class="accbadge">${accLabel(en.account)}</span>${(en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):''}<span class="en-date">${escapeHtml(en.date)}</span>${en.note ? '<span class="en-note">' + escapeHtml(en.note) + '</span>' : ''}</span>
       </div>
       <div class="actions">
         <span class="amt ${en.type}">${en.type==='income'?'+':'-'}${moneyFmt(en.amount)}</span>
@@ -673,7 +674,7 @@ function renderAllEntriesModalList(){
   const shown = sorted.slice(0, allEntriesShownCount);
   list.innerHTML = shown.map(en => `
     <div class="entry ${en.transfer ? '' : (en.type==='income' ? 'income-bg' : 'expense-bg')}" onclick="openEntryDetail(${Number(en.id)})" role="button" tabindex="0">
-      <div class="left"><span class="tag"><span class="accbadge">${accLabel(en.account)}</span>${(en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):''}${escapeHtml(en.date)}${en.note ? ' · ' + escapeHtml(en.note) : ''}</span></div>
+      <div class="left"><span class="tag"><span class="accbadge">${accLabel(en.account)}</span>${(en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):''}<span class="en-date">${escapeHtml(en.date)}</span>${en.note ? '<span class="en-note">' + escapeHtml(en.note) + '</span>' : ''}</span></div>
       <div class="actions"><span class="amt ${en.type}">${en.type==='income'?'+':'-'}${moneyFmt(en.amount)}</span>${entryActionsHtml(en)}</div>
     </div>
   `).join('');
@@ -819,7 +820,7 @@ function renderSavingsTab(){
     const bgClass = isReattrib ? '' : (en.type==='income' ? 'income-bg' : 'expense-bg');
     return `
     <div class="entry ${bgClass}" onclick="openEntryDetail(${Number(en.id)})" role="button" tabindex="0">
-      <div class="left"><span class="tag">${escapeHtml(en.date)}${en.note?' · '+escapeHtml(en.note):''}</span></div>
+      <div class="left"><span class="tag"><span class="en-date">${escapeHtml(en.date)}</span>${en.note?'<span class="en-note">'+escapeHtml(en.note)+'</span>':''}</span></div>
       <div class="actions"><span class="amt ${isReattrib?'':en.type}">${sign}${moneyFmt(amt)}</span>${entryActionsHtml(en)}</div>
     </div>
   `;
@@ -1116,7 +1117,7 @@ function renderSummary(){
   if(monthNormal.length===0){ monthList.innerHTML = '<div class="empty">'+L('noEntries')+'</div>'; }
   else {
     const sorted = [...monthNormal].sort((a,b)=> String(b.date||'').localeCompare(String(a.date||'')) || b.id-a.id);
-    monthList.innerHTML = sorted.map(en=>'<div class="entry"><div class="left"><span class="tag"><span class="accbadge">'+accLabel(en.account)+'</span>'+((en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):'')+escapeHtml(en.date)+(en.note?' · '+escapeHtml(en.note):'')+'</span></div><div class="actions"><span class="amt '+en.type+'">'+(en.type==='income'?'+':'-')+moneyFmt(en.amount)+'</span>'+entryActionsHtml(en)+'</div></div>').join('');
+    monthList.innerHTML = sorted.map(en=>'<div class="entry"><div class="left"><span class="tag"><span class="accbadge">'+accLabel(en.account)+'</span>'+((en.budgetType==='need'||en.budgetType==='want')?('<span class="bwbadge '+en.budgetType+'">'+L(en.budgetType+'Label')+'</span>'):'')+'<span class="en-date">'+escapeHtml(en.date)+'</span>'+(en.note?'<span class="en-note">'+escapeHtml(en.note)+'</span>':'')+'</span></div><div class="actions"><span class="amt '+en.type+'">'+(en.type==='income'?'+':'-')+moneyFmt(en.amount)+'</span>'+entryActionsHtml(en)+'</div></div>').join('');
   }
 }
 

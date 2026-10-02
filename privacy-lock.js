@@ -97,8 +97,8 @@ async function registerFingerprint(){
   const cred = await navigator.credentials.create({
     publicKey: {
       challenge,
-      rp: { name: 'হিসাব খাতা' },
-      user: { id: userId, name: 'hisab-khata-user', displayName: 'হিসাব খাতা' },
+      rp: { name: 'Arcus' },
+      user: { id: userId, name: 'hisab-khata-user', displayName: 'Arcus' },
       pubKeyCredParams: [{ type:'public-key', alg:-7 }, { type:'public-key', alg:-257 }],
       authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
       timeout: 60000
@@ -152,8 +152,28 @@ async function showLockScreen(){
   document.getElementById('lockScreenPwInput').value = '';
   document.getElementById('lockScreenError').style.display = 'none';
   const fpBtn = document.getElementById('lockScreenFingerprintBtn');
-  fpBtn.style.display = (fingerprintEnabled() && await checkFingerprintAvailable()) ? 'block' : 'none';
-  setTimeout(()=>{ document.getElementById('lockScreenPwInput').focus(); }, 60);
+  const fpOk = fingerprintEnabled() && await checkFingerprintAvailable();
+  fpBtn.style.display = fpOk ? 'block' : 'none';
+  if(fpOk){
+    /* অ্যাপ খুলতেই নিজে থেকে ফিঙ্গারপ্রিন্ট চাওয়া হবে — বাতিল/ফেল করলে পাসওয়ার্ড স্ক্রিনই থাকবে */
+    runFingerprintUnlock(true);
+  }else{
+    setTimeout(()=>{ document.getElementById('lockScreenPwInput').focus(); }, 60);
+  }
+}
+let lkFpBusy = false;
+async function runFingerprintUnlock(auto){
+  if(lkFpBusy || !fingerprintEnabled() || !isCurrentlyLocked()) return;
+  lkFpBusy = true;
+  try{
+    const ok = await unlockWithFingerprint();
+    if(ok) hideLockScreen();
+    else if(!auto) showLockScreenErr(L('lockScreenFingerprintFail'));
+  }catch(err){ /* ব্যবহারকারী বাতিল করলে বা মেলেনি — চুপচাপ পাসওয়ার্ড স্ক্রিনে থাকুক */ }
+  finally{
+    lkFpBusy = false;
+    if(auto && isCurrentlyLocked()){ try{ document.getElementById('lockScreenPwInput').focus(); }catch(e){} }
+  }
 }
 function hideLockScreen(){
   lockScreenEl.classList.remove('show');
@@ -194,14 +214,7 @@ document.getElementById('lockScreenUnlockBtn').addEventListener('click', ()=>{
 document.getElementById('lockScreenPwInput').addEventListener('keypress', (e)=>{
   if(e.key === 'Enter') document.getElementById('lockScreenUnlockBtn').click();
 });
-document.getElementById('lockScreenFingerprintBtn').addEventListener('click', async ()=>{
-  if(!fingerprintEnabled()) return;
-  try{
-    const ok = await unlockWithFingerprint();
-    if(ok) hideLockScreen();
-    else showLockScreenErr(L('lockScreenFingerprintFail'));
-  }catch(err){ /* ব্যবহারকারী বাতিল করলে বা মেলেনি — চুপচাপ পাসওয়ার্ড স্ক্রিনে থাকুক */ }
-});
+document.getElementById('lockScreenFingerprintBtn').addEventListener('click', ()=>{ runFingerprintUnlock(false); });
 
 /* ---------- আইডল টাইমআউট: ১ ঘণ্টা কিছু না করলে আবার লক ---------- */
 let lkThrottleTimer = null;

@@ -1,9 +1,9 @@
-const CACHE = 'hisab-khata-v60;
+const CACHE = 'hisab-khata-v84';
 const FILES = [
   './', './index.html', './style.css', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png',
   './i18n.js', './settings.js', './privacy-lock.js', './backup.js', './state.js', './recurring.js',
-  './render.js', './entries.js', './notes-plans.js', './loans.js', './reminders.js', './init.js'
+  './render.js', './entries.js', './notes-plans.js', './loans.js', './reminders.js', './init.js', './ui-fx.js', './ui-select.js', './ui-notes.js', './calc.js'
 ];
 
 self.addEventListener('install', e => {
@@ -31,7 +31,9 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     fetch(e.request, { cache: 'no-cache' })
       .then(res => {
-        if (res.ok && res.type === 'basic') {
+        // গুগল ফন্টও ক্যাশ হবে, যাতে অফলাইনে বাংলা ফন্ট ঠিক থাকে (cross-origin তাই opaque হতে পারে)
+        const isFont = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(e.request.url);
+        if ((res.ok && res.type === 'basic') || (isFont && (res.ok || res.type === 'opaque'))) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy));
         }

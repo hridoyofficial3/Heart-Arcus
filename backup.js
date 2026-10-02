@@ -32,10 +32,13 @@ async function encryptBackupPayload(dataObj, password){
     exportedAt: new Date().toISOString(), salt: bufToBase64(salt), iv: bufToBase64(iv), ciphertext: bufToBase64(cipherBuf) };
 }
 async function decryptBackupPayload(payload, password){
-  const salt = new Uint8Array(base64ToBuf(payload.salt));
-  const iv = new Uint8Array(base64ToBuf(payload.iv));
+  // ফাইলের base64 নষ্ট হলে সেটা পাসওয়ার্ড-ভুল নয় — আলাদা চিহ্নিত এরর
+  let saltB, ivB, ctB;
+  try{ saltB = new Uint8Array(base64ToBuf(payload.salt)); ivB = new Uint8Array(base64ToBuf(payload.iv)); ctB = base64ToBuf(payload.ciphertext); }
+  catch(e){ const ce = new Error('corrupt backup file'); ce.corruptFile = true; throw ce; }
+  const salt = saltB, iv = ivB;
   const key = await deriveAesKey(password, salt);
-  const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, base64ToBuf(payload.ciphertext));
+  const plainBuf = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ctB);
   return JSON.parse(new TextDecoder().decode(plainBuf));
 }
 // এনক্রিপ্ট করার পর মেমরিতে আবার ডিক্রিপ্ট করে মূল ডেটার সাথে মিলিয়ে দেখে; না মিললে throw (তখন ডাউনলোড হয় না)
@@ -336,7 +339,8 @@ function applyImportedBackup(parsed){
     if(!isFiniteNum(settings.wantPct)) settings.wantPct = defaultSettings.wantPct;
     if(typeof settings.advancedMode !== 'boolean') settings.advancedMode = defaultSettings.advancedMode;
     if(!settings.pctHistory || typeof settings.pctHistory !== 'object') settings.pctHistory = {};
-    if(!['system','light','dark','black'].includes(settings.darkMode)) settings.darkMode = 'light';
+    if(!['system','light','dark','black','custom'].includes(settings.darkMode)) settings.darkMode = 'light';
+    if(typeof bgInfo === 'function' && settings.customBg && !bgInfo(settings.customBg)) delete settings.customBg;
     if(typeof settings.dueReminderOn !== 'boolean') settings.dueReminderOn = true;
     if(![1,3,7].includes(settings.dueReminderDays)) settings.dueReminderDays = 3;
     if(typeof settings.dueNotifyOn !== 'boolean') settings.dueNotifyOn = false;
@@ -392,7 +396,10 @@ document.getElementById('importDataInput').addEventListener('change', (e)=>{
           if(!decrypted || typeof decrypted !== 'object' || !Array.isArray(decrypted.entries)){ toast(L('backupInvalidFileToast')); return true; }
           startImportFlow(decrypted);
           return true;
-        }catch(err){ return false; }
+        }catch(err){
+          if(err && err.corruptFile){ toast(L('backupInvalidFileToast')); return true; }
+          return false;
+        }
       });
       return;
     }

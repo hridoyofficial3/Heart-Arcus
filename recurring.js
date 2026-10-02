@@ -137,6 +137,7 @@ function renderRecurringPendingModal(){
     };
     sel.addEventListener('change', updateHint);
     updateHint();
+    if(!sel.options.length){ const pb = item.querySelector('[data-act="pay"]'); if(pb){ pb.disabled = true; pb.style.opacity = '.5'; } }
     item.querySelector('[data-act="pay"]').addEventListener('click', ()=>{ payRecurring(tpl, period, sel.value); });
     item.querySelector('[data-act="skip"]').addEventListener('click', ()=>{ skipRecurring(tpl, period); });
   });

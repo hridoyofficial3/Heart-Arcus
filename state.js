@@ -505,7 +505,9 @@ function loadData(){
   if(settings.needPct + settings.wantPct > 100){ settings.needPct = 50; settings.wantPct = 30; }
   settings.advancedMode = !!settings.advancedMode;
   if(!settings.pctHistory || typeof settings.pctHistory !== 'object') settings.pctHistory = {};
-  if(!['system','light','dark','black'].includes(settings.darkMode)) settings.darkMode = 'light';
+  if(!['system','light','dark','black','custom'].includes(settings.darkMode)) settings.darkMode = 'light';
+  if(typeof bgInfo === 'function' && settings.customBg && !bgInfo(settings.customBg)) delete settings.customBg;
+  if(!['teal','ocean','violet','emerald','amber','rose','graphite','mocha'].includes(settings.accent)) settings.accent = 'teal';
   if(typeof settings.dueReminderOn !== 'boolean') settings.dueReminderOn = true;
   if(![1,3,7].includes(settings.dueReminderDays)) settings.dueReminderDays = 3;
   if(typeof settings.dueNotifyOn !== 'boolean') settings.dueNotifyOn = false;
