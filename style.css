@@ -2479,6 +2479,8 @@ header .app-icon{ padding:0 !important; overflow:hidden; background:transparent 
 .calc-screen{ background:var(--sub-bg); border:1px solid var(--line); border-radius:16px; padding:12px 14px; margin-bottom:12px; text-align:right; overflow:hidden; }
 .calc-expr{ min-height:20px; font-size:14px; color:var(--disabled-txt); white-space:nowrap; overflow-x:auto; }
 .calc-res{ font-size:34px; font-weight:800; color:var(--ink); line-height:1.25; white-space:nowrap; overflow-x:auto; }
+.calc-expr, .calc-res{ scrollbar-width:none; -ms-overflow-style:none; -webkit-user-select:none; user-select:none; caret-color:transparent; outline:none; -webkit-tap-highlight-color:transparent; }
+.calc-expr::-webkit-scrollbar, .calc-res::-webkit-scrollbar{ display:none; width:0; height:0; }
 .calc-grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
 .calc-key{ height:56px; border:1px solid var(--line); border-radius:16px; background:var(--sub-bg); color:var(--ink); font-size:21px; font-weight:700; cursor:pointer; touch-action:manipulation; font-family:inherit; }
 .calc-key:active{ transform:scale(.94); }
