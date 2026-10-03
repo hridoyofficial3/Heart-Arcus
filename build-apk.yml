@@ -1,0 +1,99 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'LICENSE'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  OBFUSCATE: 'true'   # কোড এলোমেলো করা। কিছু ভাঙলে এটা 'false' করে দেখুন।
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Decide where releases are published
+        env:
+          RELEASES_REPO: ${{ secrets.RELEASES_REPO }}
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: |
+          if [ -n "$RELEASES_REPO" ] && [ -n "$RELEASES_TOKEN" ]; then
+            echo "RELEASE_REPO=$RELEASES_REPO" >> $GITHUB_ENV
+            echo "USE_SEPARATE=1" >> $GITHUB_ENV
+          else
+            echo "RELEASE_REPO=${{ github.repository }}" >> $GITHUB_ENV
+            echo "USE_SEPARATE=0" >> $GITHUB_ENV
+          fi
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Copy web files to www
+        run: |
+          mkdir -p www
+          cp -r backgrounds *.js *.css *.html *.json *.png www/
+          rm -f www/package.json www/capacitor.config.json
+          echo "window.APP_BUILD={build:${{ github.run_number }},repo:\"$RELEASE_REPO\"};" > www/app-version.js
+
+      - name: Obfuscate JavaScript
+        if: env.OBFUSCATE == 'true'
+        run: node tools/obfuscate.js
+
+      - name: Add Android platform
+        run: npx cap add android
+
+      - name: Add notification permissions
+        run: |
+          M=android/app/src/main/AndroidManifest.xml
+          grep -q POST_NOTIFICATIONS $M || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n</manifest>#' $M
+          grep -q RECEIVE_BOOT_COMPLETED $M || sed -i 's#</manifest>#    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />\n</manifest>#' $M
+
+      - name: Sync
+        run: npx cap sync android
+
+      - name: Use fixed signing key (so updates install over old versions)
+        run: |
+          mkdir -p ~/.android
+          cp debug.keystore ~/.android/debug.keystore
+
+      - name: Build debug APK
+        working-directory: android
+        run: ./gradlew assembleDebug
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Arcus-APK
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Publish Release
+        env:
+          RELEASES_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          DEFAULT_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "$USE_SEPARATE" = "1" ]; then export GH_TOKEN="$RELEASES_TOKEN"; else export GH_TOKEN="$DEFAULT_TOKEN"; fi
+          TAG="build-${{ github.run_number }}"
+          cp android/app/build/outputs/apk/debug/app-debug.apk Arcus.apk
+          gh release delete "$TAG" --repo "$RELEASE_REPO" --cleanup-tag -y || true
+          gh release create "$TAG" Arcus.apk \
+            --repo "$RELEASE_REPO" \
+            --title "Arcus (build ${{ github.run_number }})" \
+            --notes "$(git log -1 --pretty=%B)" \
+            --latest
