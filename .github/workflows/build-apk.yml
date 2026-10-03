@@ -12,7 +12,7 @@ permissions:
   contents: write
 
 env:
-  OBFUSCATE: 'true'   # কোড এলোমেলো করা। কিছু ভাঙলে এটা 'false' করে দেখুন।
+  OBFUSCATE: 'true'
 
 jobs:
   build:
@@ -59,6 +59,45 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Set app icon and splash
+        run: |
+          pip install pillow
+          python3 - <<'PY'
+          import glob, os
+          from PIL import Image
+          res = 'android/app/src/main/res'
+          bg = (248, 250, 252, 255)
+          icon = Image.open('icon-512.png').convert('RGBA')
+          mask = Image.open('icon-maskable-512.png').convert('RGBA')
+          sizes = {'mdpi': (48, 108), 'hdpi': (72, 162), 'xhdpi': (96, 216), 'xxhdpi': (144, 324), 'xxxhdpi': (192, 432)}
+          for d, (legacy, fg) in sizes.items():
+              folder = res + '/mipmap-' + d
+              os.makedirs(folder, exist_ok=True)
+              l = icon.resize((legacy, legacy), Image.LANCZOS)
+              l.save(folder + '/ic_launcher.png')
+              l.save(folder + '/ic_launcher_round.png')
+              canvas = Image.new('RGBA', (fg, fg), (0, 0, 0, 0))
+              s = int(fg * 0.78)
+              m = mask.resize((s, s), Image.LANCZOS)
+              canvas.paste(m, ((fg - s) // 2, (fg - s) // 2), m)
+              canvas.save(folder + '/ic_launcher_foreground.png')
+          for f in glob.glob(res + '/drawable*/ic_launcher_foreground.xml') + glob.glob(res + '/drawable*/ic_launcher_background.xml'):
+              os.remove(f)
+          os.makedirs(res + '/values', exist_ok=True)
+          open(res + '/values/ic_launcher_background.xml', 'w').write('<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="ic_launcher_background">#F8FAFC</color>\n</resources>\n')
+          os.makedirs(res + '/mipmap-anydpi-v26', exist_ok=True)
+          adaptive = '<?xml version="1.0" encoding="utf-8"?>\n<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">\n    <background android:drawable="@color/ic_launcher_background"/>\n    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>\n</adaptive-icon>\n'
+          for n in ('ic_launcher.xml', 'ic_launcher_round.xml'):
+              open(res + '/mipmap-anydpi-v26/' + n, 'w').write(adaptive)
+          for p in glob.glob(res + '/drawable*/splash.png'):
+              w, h = Image.open(p).size
+              c = Image.new('RGBA', (w, h), bg)
+              s = int(min(w, h) * 0.3)
+              m = mask.resize((s, s), Image.LANCZOS)
+              c.paste(m, ((w - s) // 2, (h - s) // 2), m)
+              c.convert('RGB').save(p)
+          PY
+
       - name: Add notification permissions
         run: |
           M=android/app/src/main/AndroidManifest.xml
@@ -68,7 +107,7 @@ jobs:
       - name: Sync
         run: npx cap sync android
 
-      - name: Use fixed signing key (so updates install over old versions)
+      - name: Use fixed signing key
         run: |
           mkdir -p ~/.android
           cp debug.keystore ~/.android/debug.keystore
