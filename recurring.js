@@ -77,16 +77,25 @@ function restoreRecurringHistory(removed, save){
 }
 
 function checkRecurringReminder(){
-  const banner = document.getElementById('recurringReminderBanner');
-  if(!banner) return;
-  const pending = getAllPendingRecurring();
-  if(pending.length === 0){ banner.classList.remove('show'); return; }
-  document.getElementById('recurringReminderMsg').textContent = tfmt('recurringReminderMsgFmt', { n: numFmt(pending.length) });
-  banner.classList.add('show');
+  const badge = document.getElementById('bellBadge');
+  const bell = document.getElementById('bellBtn');
+  const n = getAllPendingRecurring().length + ((typeof getNotifDueItems === 'function') ? getNotifDueItems().length : 0) + (getBackupReminderMsg() ? 1 : 0);
+  if(badge){
+    badge.textContent = n > 9 ? numFmt(9)+'+' : numFmt(n);
+    badge.classList.toggle('show', n > 0);
+  }
+  if(bell) bell.setAttribute('aria-label', n > 0 ? (L('notifTitle')+' ('+n+')') : L('notifTitle'));
+  const modal = document.getElementById('recurringPendingModal');
+  if(modal && modal.classList.contains('open')) renderRecurringPendingModal();
 }
-document.getElementById('recurringReminderGoBtn').addEventListener('click', openRecurringPendingModal);
+document.getElementById('bellBtn').addEventListener('click', openRecurringPendingModal);
 
+function notifBackupAction(){
+  closeRecurringPendingModal();
+  setTimeout(openBackupSection, 120);
+}
 function openRecurringPendingModal(){
+  notifOpenKey = null;   // প্রতিবার খুললে সব বন্ধ — শুধু টাইটেল
   renderRecurringPendingModal();
   document.getElementById('recurringPendingModal').classList.add('open');
   lockBodyScroll();
@@ -96,17 +105,51 @@ function closeRecurringPendingModal(){
   unlockBodyScroll();
 }
 document.getElementById('recurringPendingCloseBtn').addEventListener('click', closeRecurringPendingModal);
+document.getElementById('recurringPendingModal').addEventListener('click', (e)=>{
+  const head = e.target.closest && e.target.closest('.nt-head');
+  if(!head) return;
+  const item = head.parentElement, willOpen = !item.classList.contains('open');
+  document.querySelectorAll('#recurringPendingModal .notif-item.open').forEach(x=>{ x.classList.remove('open'); const h=x.querySelector('.nt-head'); if(h) h.setAttribute('aria-expanded','false'); });
+  if(willOpen){ item.classList.add('open'); head.setAttribute('aria-expanded','true'); }
+  notifOpenKey = willOpen ? item.dataset.key : null;
+});
 document.getElementById('recurringPendingModal').addEventListener('click', (e)=>{ if(e.target.id==='recurringPendingModal') closeRecurringPendingModal(); });
 
 function renderRecurringPendingModal(){
   const wrap = document.getElementById('recurringPendingList');
   const pending = getAllPendingRecurring();
-  if(pending.length === 0){ closeRecurringPendingModal(); return; }
+  const dueItems = (typeof getNotifDueItems === 'function') ? getNotifDueItems() : [];
+  const backupMsg = getBackupReminderMsg();
+  const total = pending.length + dueItems.length + (backupMsg ? 1 : 0);
+  const cnt = document.getElementById('notifCount');
+  if(cnt){ cnt.textContent = total ? numFmt(total) : ''; cnt.style.display = total ? '' : 'none'; }
+  const emptyEl = document.getElementById('notifEmpty');
+  if(emptyEl) emptyEl.style.display = total ? 'none' : 'block';
+  const secLbl = document.getElementById('notifSectionLabel');
+  if(secLbl) secLbl.style.display = pending.length ? '' : 'none';
+  const bkLbl = document.getElementById('notifBackupLabel');
+  const bkWrap = document.getElementById('notifBackupList');
+  if(bkLbl) bkLbl.style.display = backupMsg ? '' : 'none';
+  if(bkWrap){
+    const open = (notifOpenKey === 'b:backup');
+    bkWrap.innerHTML = backupMsg ? '<div class="notif-item notif-due recv'+(open ? ' open' : '')+'" data-key="b:backup" style="--bk:1">'+
+      '<button type="button" class="nt-head" aria-expanded="'+(open ? 'true' : 'false')+'"><span class="nt-title">'+escapeHtml(backupMsg)+'</span>'+NT_CHEVRON+'</button>'+
+      '<div class="nt-body"><div class="nd-actions"><button class="ri-pay-btn nd-btn" onclick="notifBackupAction()">'+L('backupReminderBtn')+'</button></div></div></div>' : '';
+  }
+  const dueLbl = document.getElementById('notifDueLabel');
+  const dueWrap = document.getElementById('notifDueList');
+  if(dueLbl) dueLbl.style.display = dueItems.length ? '' : 'none';
+  if(dueWrap) dueWrap.innerHTML = dueItems.length ? renderNotifDueCards(dueItems) : '';
+  if(pending.length === 0){ wrap.innerHTML = ''; return; }
   const accs = getActiveAccountsList().filter(a=> a.id !== 'savings');
   const accOpts = accs.map(a => '<option value="'+escapeHtml(a.id)+'">'+escapeHtml(accOptionIconText(a.icon)+(a.i18n ? L(a.name) : a.name))+'</option>').join('');
   const skipLinkKey = { expense:'recurringSkipLinkExpense', income:'recurringSkipLinkIncome' };
   wrap.innerHTML = pending.map(({tpl, period})=>{
-    return '<div class="recurring-item" data-tpl="'+Number(tpl.id)+'" data-period="'+escapeHtml(period)+'">'+
+    const key = 'r:'+Number(tpl.id)+':'+period;
+    const isOpen = (notifOpenKey === key);
+    return '<div class="recurring-item notif-item'+(isOpen ? ' open' : '')+'" data-key="'+escapeHtml(key)+'" data-tpl="'+Number(tpl.id)+'" data-period="'+escapeHtml(period)+'">'+
+      '<button type="button" class="nt-head" aria-expanded="'+(isOpen ? 'true' : 'false')+'"><span class="nt-title">'+escapeHtml(tpl.note)+'</span>'+NT_CHEVRON+'</button>'+
+      '<div class="nt-body">'+
       '<div class="ri-top"><span class="ri-note">'+escapeHtml(tpl.note)+'</span><span class="ri-amt">'+moneyFmt(tpl.amount)+'</span></div>'+
       '<div class="ri-meta">'+recurringTypeLabel(tpl.type)+' · '+formatPeriodLabel(tpl, period)+'</div>'+
       '<label style="display:block; margin-top:8px;">'+L('recurringPayFromLabel')+'</label>'+
@@ -115,7 +158,7 @@ function renderRecurringPendingModal(){
       '<div class="ri-actions">'+
         '<button class="ri-pay-btn" data-act="pay">'+L('recurringPayBtn')+'</button>'+
         '<button class="ri-skip-link" data-act="skip">'+L(skipLinkKey[tpl.type]||'recurringSkipLinkExpense')+'</button>'+
-      '</div></div>';
+      '</div></div></div>';
   }).join('');
   wrap.querySelectorAll('.recurring-item').forEach(item=>{
     const tplId = item.dataset.tpl;
@@ -147,6 +190,7 @@ function payRecurring(tpl, period, account){
   const note = tpl.note;
   const entryIds = [];
   if(!account){ openAlert(L('entrySelectAccountMsg')); return; }
+  const tx = txBegin(['hisab_entries','hisab_recurring']);
   if(tpl.type === 'expense'){
     if(gtMoney(tpl.amount, accountBalance(account))){ openAlert(L('recurringInsufficientBalance')); return; }
     const id1 = nextId();
@@ -157,9 +201,8 @@ function payRecurring(tpl, period, account){
     entries.push({ id:id1, type:'income', account, amount:tpl.amount, date, note, transfer:false, budgetType:null });
     entryIds.push(id1);
   }
-  saveEntries();
   tpl.history[period] = { status:'paid', entryIds, amount: tpl.amount, account };
-  saveRecurring();
+  if(!txCommit(tx)) return;
   toast(L('recurringPaidToast'));
   renderAll(); checkRecurringReminder();
   renderRecurringPendingModal();

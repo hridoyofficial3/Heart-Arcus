@@ -49,10 +49,10 @@ document.getElementById('loanForm').addEventListener('submit', (e)=>{
     const loanId = nextId();
     const noteText = ltype==='taken' ? tfmt('loanTakenNoteFmt', { person }) : tfmt('loanGivenNoteFmt', { person });
     const entryId = nextId();
+    const tx = txBegin(['hisab_entries','hisab_loans']);
     entries.push({ id: entryId, pairId: entryId, type: ltype==='taken' ? 'income' : 'expense', account, amount, date, note: noteText, transfer:true, budgetType:null, loanId });
-    saveEntries();
     loans.push({ id: loanId, type: ltype, person, amount, originalAmount: amount, paidAmount: 0, account, date, dueDate, note, settled:false, settledDate:null, entryIds:[entryId], settleEntryIds:[] });
-    saveLoans();
+    if(!txCommit(tx)) return;
     document.getElementById('loanForm').reset();
     document.getElementById('loanDate').value = todayStr();
     updateLoanAcctAvailableHint(); updateLoanBtnState(); renderAll();
@@ -102,11 +102,11 @@ document.getElementById('selfLoanTakeForm').addEventListener('submit', (e)=>{
   openConfirm('confSelfLoanTitle', rows, ()=>{
     const loanId = nextId();
     const id1 = nextId(), id2 = nextId();
+    const tx = txBegin(['hisab_entries','hisab_loans']);
     entries.push({ id:id1, pairId:id1, type:'expense', account:'savings', amount, date, note:L('loanSelfEntryNote'), transfer:true, budgetType:null, loanId });
     entries.push({ id:id2, pairId:id1, type:'income', account, amount, date, note:L('loanSelfEntryNote'), transfer:true, budgetType:null, loanId });
-    saveEntries();
     loans.push({ id:loanId, type:'self', person:'', amount, originalAmount:amount, paidAmount:0, account, date, dueDate, note, settled:false, settledDate:null, entryIds:[id1, id2], settleEntryIds:[] });
-    saveLoans();
+    if(!txCommit(tx)) return;
     document.getElementById('selfLoanTakeForm').reset();
     document.getElementById('selfLoanDate').value = todayStr();
     updateSelfLoanAvailableHint(); renderAll();
@@ -322,14 +322,15 @@ function applyDuePayment(due, amt, account, date, isFull){
     : (isFull ? tfmt('duePaidNoteFmt', { person: due.person }) : tfmt('duePartialPaidNoteFmt', { person: due.person }));
   if(due.reason) noteText += ' — ' + due.reason;
   const entryId = nextId();
+  const tx = txBegin(['hisab_entries','hisab_dues']);
   entries.push({ id: entryId, type: due.type==='receivable' ? 'income' : 'expense', account, amount: amt, date, note: noteText, transfer:false, budgetType:null, dueId: due.id });
-  saveEntries();
   if(!due.settleEntryIds) due.settleEntryIds = [];
   due.settleEntryIds.push(entryId);
   due.paidAmount = +((due.paidAmount || 0) + amt).toFixed(2);
   due.amount = Math.max(0, +(due.amount - amt).toFixed(2));
   if(isFull || due.amount <= 0.01){ due.settled = true; due.settledDate = date; due.amount = 0; }
-  saveDues(); renderAll();
+  if(!txCommit(tx)) return;
+  renderAll();
   toast(isFull ? L('dueSettledToast') : L('duePartialSettledToast'));
 }
 function deleteDue(id){
@@ -524,14 +525,15 @@ function applyLoanPayment(loan, amt, account, date, isFull){
     ? (loan.type==='taken' ? tfmt('loanTakenRepayNoteFmt', { person: loan.person }) : tfmt('loanGivenRepayNoteFmt', { person: loan.person }))
     : (loan.type==='taken' ? tfmt('loanPartialTakenRepayNoteFmt', { person: loan.person }) : tfmt('loanPartialGivenRepayNoteFmt', { person: loan.person }));
   const entryId = nextId();
+  const tx = txBegin(['hisab_entries','hisab_loans']);
   entries.push({ id: entryId, type: loan.type==='taken' ? 'expense' : 'income', account, amount: amt, date, note: noteText, transfer:false, budgetType:null, loanId: loan.id });
-  saveEntries();
   if(!loan.settleEntryIds) loan.settleEntryIds = [];
   loan.settleEntryIds.push(entryId);
   loan.paidAmount = +((loan.paidAmount || 0) + amt).toFixed(2);
   loan.amount = Math.max(0, +(loan.amount - amt).toFixed(2));
   if(isFull || loan.amount <= 0.01){ loan.settled = true; loan.settledDate = date; loan.amount = 0; }
-  saveLoans(); renderAll();
+  if(!txCommit(tx)) return;
+  renderAll();
   toast(isFull ? L('loanSettledToast') : L('loanPartialSettledToast'));
 }
 function deleteLoan(id){
@@ -643,15 +645,16 @@ function repaySelfLoan(id, fromAccount, amt){
     (!isFull ? confirmRow(L('remainingAfterLabel'), moneyFmt(remaining)) : '');
   openConfirm('confSelfRepayTitle', rows, ()=>{
     const id1 = nextId(), id2 = nextId();
+    const tx = txBegin(['hisab_entries','hisab_loans']);
     entries.push({ id:id1, pairId:id1, type:'expense', account:from, amount:payAmt, date, note:L('loanSelfRepayEntryNote'), transfer:true, budgetType:null, loanId: loan.id });
     entries.push({ id:id2, pairId:id1, type:'income', account:'savings', amount:payAmt, date, note:L('loanSelfRepayEntryNote'), transfer:true, budgetType:null, loanId: loan.id });
-    saveEntries();
     if(!loan.settleEntryIds) loan.settleEntryIds = [];
     loan.settleEntryIds.push(id1, id2);
     loan.paidAmount = +((loan.paidAmount || 0) + payAmt).toFixed(2);
     loan.amount = remaining;
     if(isFull){ loan.settled = true; loan.settledDate = date; loan.amount = 0; }
-    saveLoans(); renderAll();
+    if(!txCommit(tx)) return;
+    renderAll();
     toast(isFull ? L('loanSelfRepaidToast') : L('loanPartialSettledToast'));
   });
 }

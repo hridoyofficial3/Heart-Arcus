@@ -29,7 +29,12 @@ const LK_F_COOLDOWN  = 'hisab_lock_forgot_cooldown_until';
 const IDLE_LIMIT_MS  = 60 * 60 * 1000;   /* ১ ঘণ্টা */
 const PIN_MIN_LEN    = 4;
 const PIN_MAX_LEN    = 8;
-const LK_VERSION_TXT = 'v85';
+const LK_LEVEL       = 'hisab_lock_cooldown_level';   /* বারবার ভুলে অপেক্ষা ক্রমশ বাড়ে */
+const LK_BG_GRACE_MS = 30 * 1000;                    /* অ্যাপ থেকে বেরিয়ে এতক্ষণের বেশি থাকলে আবার লক */
+function lkVersionText(){
+  const b = window.APP_BUILD && window.APP_BUILD.build;
+  return b ? ('Build ' + b) : '';
+}
 
 /* ---------- hashing / base64 ---------- */
 function lkBufToB64(buf){
@@ -155,6 +160,7 @@ const lockForgotRow = document.getElementById('lockForgotRow');
 const lockAltBtn    = document.getElementById('lockAltBtn');
 const lockEyebrowEl = document.getElementById('lockEyebrow');
 const lockVersionEl = document.getElementById('lockVersion');
+const lockCancelBtn = document.getElementById('lockCancelBtn');
 
 /* ---------- Lock screen state ---------- */
 let lockMode = 'unlock';
@@ -284,11 +290,12 @@ function showLockScreen(opts){
   lockMode = opts.mode || ensureLockScreenMode();
   lockOnSuccess = opts.onSuccess || null;
   pinBuf = ''; firstPin = null;
+  if(lockCancelBtn) lockCancelBtn.hidden = !opts.cancellable;
 
   lockScreenEl.classList.add('show');
   document.body.classList.add('lock-active');
   hideAlt();
-  if(lockVersionEl) lockVersionEl.textContent = 'Version ' + LK_VERSION_TXT;
+  if(lockVersionEl) lockVersionEl.textContent = lkVersionText();
 
   if(lockMode === 'migrate'){
     lockMainShell.hidden = true;
@@ -322,6 +329,7 @@ function showLockScreen(opts){
 
 /* ---------- close lock screen ---------- */
 function hideLockScreen(){
+  if(lockCancelBtn) lockCancelBtn.hidden = true;
   lockScreenEl.classList.remove('show');
   document.body.classList.remove('lock-active');
   hideAlt();
@@ -383,7 +391,7 @@ async function handleUnlockPin(){
   const ok = await lkVerifySecret(pin, hash, salt);
   if(ok){
     lockAttemptCount = 0;
-    try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); }catch(e){}
+    try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); localStorage.removeItem(LK_LEVEL); }catch(e){}
     lockCooldownUntil = 0;
     const cb = lockOnSuccess;
     hideLockScreen();
@@ -391,7 +399,11 @@ async function handleUnlockPin(){
   } else {
     lockAttemptCount++;
     if(lockAttemptCount >= 5){
-      lockCooldownUntil = Date.now() + 30000;
+      /* প্রতিবার ৫টা ভুলে অপেক্ষা দ্বিগুণ: ৩০সে → ১মি → ২মি → … সর্বোচ্চ ১ ঘণ্টা */
+      let lvl = 0; try{ lvl = Number(localStorage.getItem(LK_LEVEL)) || 0; }catch(e){}
+      const wait = Math.min(30000 * Math.pow(2, lvl), 3600000);
+      try{ localStorage.setItem(LK_LEVEL, String(Math.min(lvl + 1, 7))); }catch(e){}
+      lockCooldownUntil = Date.now() + wait;
       lockAttemptCount = 0;
       try{ localStorage.setItem(LK_COOLDOWN, String(lockCooldownUntil)); localStorage.removeItem(LK_ATTEMPTS); }catch(e){}
       flashDotsError(); shakeDots();
@@ -457,7 +469,7 @@ async function runFingerprintUnlock(){
     const ok = await unlockWithFingerprint();
     if(ok){
       lockAttemptCount = 0;
-      try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); }catch(e){}
+      try{ localStorage.removeItem(LK_ATTEMPTS); localStorage.removeItem(LK_COOLDOWN); localStorage.removeItem(LK_LEVEL); }catch(e){}
       lockCooldownUntil = 0;
       const cb = lockOnSuccess;
       hideLockScreen();
@@ -490,7 +502,7 @@ function migrationHtml(){
         '<div class="lock-hint alt" id="lockPwHint"></div>'+
         '<button type="button" class="lock-btn" id="lockPwBtn">'+L('lockVerifyContinueBtn')+'</button>'+
       '</div>'+
-      '<div class="lock-version">Version '+LK_VERSION_TXT+'</div>'+
+      (lkVersionText() ? '<div class="lock-version">'+lkVersionText()+'</div>' : '')+
     '</div></div>';
 }
 function wireMigration(){
@@ -560,10 +572,17 @@ function openSecurityQuestionFlow(){
   const submit = async ()=>{
     const ans = lkNormalizeAnswer(inp ? inp.value : '');
     if(!ans) return;
+    /* ভুল উত্তরে সীমা: ৫টা ভুলে ৫ মিনিট অপেক্ষা (রিলোড করলেও থাকে) */
+    const fUntil = Number(localStorage.getItem(LK_F_COOLDOWN)) || 0;
+    if(Date.now() < fUntil){
+      if(hint){ hint.textContent = tfmt('lockScreenTooManyTries', { s: Math.ceil((fUntil - Date.now()) / 1000) }); hint.classList.add('warn'); }
+      return;
+    }
     const hash = localStorage.getItem(LK_SQ_HASH);
     const salt = localStorage.getItem(LK_SQ_SALT);
     const ok = hash && salt && await lkVerifySecret(ans, hash, salt);
     if(ok){
+      lkSafeDel(LK_F_ATTEMPTS); lkSafeDel(LK_F_COOLDOWN);
       hideAlt();
       lockMode = 'setup';
       setHeading(L('lockSetPinDesc'));
@@ -571,6 +590,12 @@ function openSecurityQuestionFlow(){
       buildDots(PIN_MAX_LEN);
       updateDots(); setSpecialKey(); clearHint();
     } else {
+      let n = (Number(localStorage.getItem(LK_F_ATTEMPTS)) || 0) + 1;
+      if(n >= 5){
+        n = 0;
+        try{ localStorage.setItem(LK_F_COOLDOWN, String(Date.now() + 5 * 60 * 1000)); }catch(e){}
+      }
+      try{ localStorage.setItem(LK_F_ATTEMPTS, String(n)); }catch(e){}
       if(hint){ hint.textContent = L('forgotPwWrongErr'); hint.classList.add('warn'); }
     }
   };
@@ -608,7 +633,14 @@ function initIdleWatch(){
     document.addEventListener(evt, throttledRecordActivity, { passive:true });
   });
   setInterval(checkIdleLock, 20000);
-  document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState === 'visible') checkIdleLock(); });
+  let lkHiddenAt = 0;
+  document.addEventListener('visibilitychange', ()=>{
+    if(document.visibilityState === 'hidden'){ lkHiddenAt = Date.now(); return; }
+    /* অ্যাপ থেকে বেরিয়ে ৩০ সেকেন্ডের বেশি পরে ফিরলে আবার লক (ফাইল পিকার/ডাউনলোডের ছোট বিরতিতে নয়) */
+    if(lkHiddenAt && isLockEnabled() && !lockActive() && Date.now() - lkHiddenAt > LK_BG_GRACE_MS) showLockScreen();
+    lkHiddenAt = 0;
+    checkIdleLock();
+  });
   window.addEventListener('focus', checkIdleLock);
 }
 
@@ -645,33 +677,33 @@ document.getElementById('fingerprintToggle').addEventListener('change', async (e
 /* ---------- Enable / Change / Disable ---------- */
 document.getElementById('enableLockBtn').addEventListener('click', ()=>{
   if(!lkCryptoAvailable()){ toast(L('storageSaveFailMsg')); return; }
-  showLockScreen({ mode: 'setup', onSuccess: ()=>{
+  showLockScreen({ mode: 'setup', cancellable: true, onSuccess: ()=>{
     toast(L('lockPinSetDone'));
     updateSettingsPrivacyUI();
     openSecurityQModal('setup');
   }});
 });
 document.getElementById('changeLockPwBtn').addEventListener('click', ()=>{
-  showLockScreen({ mode: 'verify', onSuccess: ()=>{
-    showLockScreen({ mode: 'setup', onSuccess: ()=>{
+  showLockScreen({ mode: 'verify', cancellable: true, onSuccess: ()=>{
+    showLockScreen({ mode: 'setup', cancellable: true, onSuccess: ()=>{
       toast(L('lockPwChangedToast'));
       updateSettingsPrivacyUI();
     }});
   }});
 });
 document.getElementById('changeSecurityQBtn').addEventListener('click', ()=>{
-  showLockScreen({ mode: 'verify', onSuccess: ()=> openSecurityQModal('change') });
+  showLockScreen({ mode: 'verify', cancellable: true, onSuccess: ()=> openSecurityQModal('change') });
 });
 function performDisableLock(){
   [LK_ENABLED, LK_PIN_HASH, LK_PIN_SALT, LK_PIN_LEN,
    LK_PW_HASH, LK_PW_SALT, LK_SQ, LK_SQ_HASH, LK_SQ_SALT,
    LK_WEBAUTHN, LK_ACTIVITY, LK_ATTEMPTS, LK_COOLDOWN,
-   LK_F_ATTEMPTS, LK_F_COOLDOWN].forEach(lkSafeDel);
+   LK_F_ATTEMPTS, LK_F_COOLDOWN, LK_LEVEL].forEach(lkSafeDel);
   toast(L('lockDisabledToast'));
   updateSettingsPrivacyUI();
 }
 document.getElementById('disableLockBtn').addEventListener('click', ()=>{
-  showLockScreen({ mode: 'verify', onSuccess: ()=> openSimpleConfirm(L('disableLockConfirmMsg'), performDisableLock) });
+  showLockScreen({ mode: 'verify', cancellable: true, onSuccess: ()=> openSimpleConfirm(L('disableLockConfirmMsg'), performDisableLock) });
 });
 
 /* ============================================================
@@ -744,6 +776,9 @@ if(lockKeypadEl){
     pressKey(b.dataset.k);
     try{ navigator.vibrate && navigator.vibrate(6); }catch(_){}
   });
+}
+if(lockCancelBtn){
+  lockCancelBtn.addEventListener('click', ()=>{ hideLockScreen(); });
 }
 if(lockAltBtn){
   lockAltBtn.addEventListener('click', ()=>{

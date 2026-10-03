@@ -106,6 +106,7 @@ function applyLanguage(){
   if(typeof renderCorruptBanner === 'function') renderCorruptBanner();
   if(typeof checkBackupReminder === 'function') checkBackupReminder();
   if(typeof a11yLabelControls === 'function') a11yLabelControls();
+  if(typeof checkRecurringReminder === 'function') checkRecurringReminder();
 }
 
 function updateStickyOffsets(){
@@ -330,7 +331,7 @@ document.querySelectorAll('.modal-overlay').forEach(overlay=>{
    - ডাইনামিক কার্ডের ×/✎ বাটন MutationObserver দিয়ে ধরা হয় (childList; শুধু অ্যাট্রিবিউট বসায়, তাই লুপ নেই)
    ============================================================ */
 const _A11Y_ID_KEY = {
-  gearBtn:'settingsTitle', fabAddEntry:'addEntryBtn', backupReminderCloseBtn:'a11yClose',
+  gearBtn:'settingsTitle', recurringPendingCloseBtn:'a11yClose', fabAddEntry:'addEntryBtn', backupReminderCloseBtn:'a11yClose',
   prevDay:'a11yPrevDay', nextDay:'a11yNextDay', prevWeek:'a11yPrevWeek', nextWeek:'a11yNextWeek',
   prevMonth:'a11yPrevMonth', nextMonth:'a11yNextMonth', prevYear:'a11yPrevYear', nextYear:'a11yNextYear',
   entryFilterAccount:'a11yFilterAccount', allEntriesFilterAccount:'a11yFilterAccount',
@@ -415,7 +416,13 @@ function openSettings(){
   renderAccountsList();
   applyDarkMode();
 }
-function closeSettings(){ settingsModalEl.classList.remove('open'); unlockBodyScroll(); }
+/* সেটিংস বন্ধ করলে ভেতরের খোলা সেকশনগুলো (accordion) গুটিয়ে ফেলো ও ওপরে স্ক্রল করো — পরেরবার খুললে আগের মতো সব বন্ধ অবস্থায় আসবে */
+function collapseSettingsSections(){
+  settingsModalEl.querySelectorAll('.collapsible.open').forEach(h=>{ h.classList.remove('open'); h.setAttribute('aria-expanded','false'); });
+  settingsModalEl.querySelectorAll('.collapse-body.open').forEach(b=>b.classList.remove('open'));
+  const card = settingsModalEl.querySelector('.modal-card'); if(card) card.scrollTop = 0;
+}
+function closeSettings(){ settingsModalEl.classList.remove('open'); unlockBodyScroll(); collapseSettingsSections(); }
 
 document.getElementById('gearBtn').addEventListener('click', openSettings);
 document.getElementById('settingsCloseBtn').addEventListener('click', closeSettings);
@@ -490,7 +497,7 @@ document.getElementById('resetAllConfirmOkBtn').addEventListener('click', ()=>{
   const pass = document.getElementById('resetAllConfirmInput').value;
   closeResetAllConfirmModal();
   if(pass !== atob(RESET_ALL_PASS_B64)){ toast(L('resetAllWrongPasswordToast')); return; }
-  openSimpleConfirm(L('resetAllConfirmMsg'), ()=>{
+  const doReset = ()=> openSimpleConfirm(L('resetAllConfirmMsg'), ()=>{
     try{
       ['hisab_entries','hisab_notes','hisab_plans','hisab_loans','hisab_dues','hisab_settings',
        'hisab_recurring','hisab_lang','hisab_last_backup','hisab_backup_banner_dismissed','hisab_backup_notify','hisab_backup_notify_base','hisab_due_native_init','hisab_due_native_slots',
@@ -498,6 +505,10 @@ document.getElementById('resetAllConfirmOkBtn').addEventListener('click', ()=>{
        'hisab_lock_sq_hash','hisab_lock_sq_salt','hisab_lock_webauthn_id','hisab_lock_last_activity',
        'hisab_lock_attempts','hisab_lock_cooldown_until','hisab_lock_forgot_attempts','hisab_lock_forgot_cooldown_until']
         .forEach(k=> localStorage.removeItem(k));
+      // বাকি সব hisab_ কী-ও (PIN hash/salt/দৈর্ঘ্য, Google Drive অবস্থা, নোটিফিকেশন লগ ইত্যাদি) — আগে এগুলো থেকে যেত
+      const leftovers = [];
+      for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && k.indexOf('hisab_') === 0) leftovers.push(k); }
+      leftovers.forEach(k=> localStorage.removeItem(k));
       // T2: নষ্ট ডেটার আলাদা কপিগুলোও সাফ (নইলে রিসেটের পরও জায়গা আটকে থাকত)
       const corruptCopies = [];
       for(let i=0; i<localStorage.length; i++){ const k = localStorage.key(i); if(k && k.indexOf(CORRUPT_PREFIX) === 0) corruptCopies.push(k); }
@@ -506,6 +517,9 @@ document.getElementById('resetAllConfirmOkBtn').addEventListener('click', ()=>{
     toast(L('resetAllDoneToast'));
     setTimeout(()=>{ location.reload(); }, 500);
   });
+  // অ্যাপ লক চালু থাকলে রিসেটের আগে PIN-ও লাগবে
+  if(typeof isLockEnabled === 'function' && isLockEnabled()) showLockScreen({ mode: 'verify', cancellable: true, onSuccess: doReset });
+  else doReset();
 });
 document.getElementById('resetAllBtn').addEventListener('click', openResetAllConfirmModal);
 

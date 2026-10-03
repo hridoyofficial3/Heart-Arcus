@@ -164,15 +164,16 @@ document.getElementById('buyPlanContinueBtn').addEventListener('click', ()=>{
       confirmRow(L('confDate'), date);
     closeBuyPlanModal();
     openConfirm('confBuyPlanTitle', rows, ()=>{
+      const tx = txBegin(['hisab_entries','hisab_plans']);
       const wid1 = nextId(), wid2 = nextId();
       const withdrawNote = tfmt('planBuyWithdrawNoteFmt', { item: plan.item });
       entries.push({ id:wid1, pairId:wid1, type:'expense', account:'savings', amount:amt, date, note:withdrawNote, transfer:true, budgetType:null });
       entries.push({ id:wid2, pairId:wid1, type:'income', account:dest, amount:amt, date, note:withdrawNote, transfer:true, budgetType:null });
       const pid = nextId();
       entries.push({ id:pid, type:'expense', account:dest, amount:amt, date, note: tfmt('planBoughtNoteFmt', { item: plan.item }), transfer:false, budgetType:null });
-      saveEntries();
       plan.bought = true; plan.boughtDate = date; plan.boughtAccount = dest;
-      savePlans(); renderAll();
+      if(!txCommit(tx)) return;
+      renderAll();
       toast(L('planBoughtToast'));
     });
   } else {
@@ -181,11 +182,12 @@ document.getElementById('buyPlanContinueBtn').addEventListener('click', ()=>{
       confirmRow(L('confFrom'), accLabel(account)) + confirmRow(L('confDate'), date);
     closeBuyPlanModal();
     openConfirm('confBuyPlanTitle', rows, ()=>{
+      const tx = txBegin(['hisab_entries','hisab_plans']);
       const pid = nextId();
       entries.push({ id:pid, type:'expense', account, amount:amt, date, note: tfmt('planBoughtNoteFmt', { item: plan.item }), transfer:false, budgetType:null });
-      saveEntries();
       plan.bought = true; plan.boughtDate = date; plan.boughtAccount = account;
-      savePlans(); renderAll();
+      if(!txCommit(tx)) return;
+      renderAll();
       toast(L('planBoughtToast'));
     });
   }

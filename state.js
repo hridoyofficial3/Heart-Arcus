@@ -372,6 +372,35 @@ function atomicSaveKeys(keys, saveFns){
   return ok;
 }
 
+/* দুই-ধাপের লেনদেন (যেমন এন্ট্রি + ঋণ/বকেয়া/প্ল্যান/নিয়মিত একসাথে বদলানো):
+   const tx = txBegin(['hisab_entries','hisab_loans']);  ← মেমরির বদল শুরুর আগে
+   ...মেমরিতে বদলাও...
+   if(!txCommit(tx)) return;                              ← সব কটা সেভ না হলে মেমরি + localStorage দুটোই আগের অবস্থায় ফেরে */
+function txStores(){
+  return {
+    hisab_entries:   { get: ()=>entries,            save: ()=>saveEntries() },
+    hisab_loans:     { get: ()=>loans,              save: ()=>saveLoans() },
+    hisab_dues:      { get: ()=>dues,               save: ()=>saveDues() },
+    hisab_plans:     { get: ()=>plans,              save: ()=>savePlans() },
+    hisab_recurring: { get: ()=>recurringTemplates, save: ()=>saveRecurring() }
+  };
+}
+function txBegin(keys){
+  const st = txStores(), snaps = {};
+  keys.forEach(k=>{ snaps[k] = JSON.stringify(st[k].get()); });
+  return { keys, snaps };
+}
+function txCommit(tx){
+  const st = txStores();
+  const ok = atomicSaveKeys(tx.keys, tx.keys.map(k=> st[k].save));
+  if(ok) return true;
+  tx.keys.forEach(k=>{ const arr = st[k].get(); arr.splice(0, arr.length, ...JSON.parse(tx.snaps[k])); });
+  _balanceCache = null;
+  try{ renderAll(); }catch(e){}
+  toast(L('storageSaveFailMsg'));
+  return false;
+}
+
 function renderCorruptBanner(){
   const b = document.getElementById('corruptDataBanner');
   if(!b) return;
@@ -555,24 +584,16 @@ function hasAnyData(){
 function wasBannerDismissedToday(){
   try{ const v = localStorage.getItem('hisab_backup_banner_dismissed'); if(!v) return false; return daysSince(Number(v)) === 0; }catch(e){ return false; }
 }
-function hideBackupReminderBanner(){ const b = document.getElementById('backupReminderBanner'); if(b) b.classList.remove('show'); }
-function checkBackupReminder(){
-  const banner = document.getElementById('backupReminderBanner');
-  if(!banner) return;
-  if(!hasAnyData() || wasBannerDismissedToday()){ banner.classList.remove('show'); return; }
+/* ব্যাকআপ রিমাইন্ডার এখন হোমে ব্যানার নয় — বেল আইকনের প্যানেলে আসে (recurring.js)। ব্যাকআপ নিলে নিজে থেকে সরে যায়। */
+function getBackupReminderMsg(){
+  if(!hasAnyData()) return null;
   const last = getLastBackupTime();
-  const msgEl = document.getElementById('backupReminderMsg');
-  if(!last){ msgEl.textContent = L('backupReminderNeverMsg'); banner.classList.add('show'); }
-  else {
-    const d = daysSince(last);
-    if(d >= BACKUP_REMINDER_DAYS){ msgEl.textContent = tfmt('backupReminderDaysMsg', { n: numFmt(d) }); banner.classList.add('show'); }
-    else { banner.classList.remove('show'); }
-  }
+  if(!last) return L('backupReminderNeverMsg');
+  const d = daysSince(last);
+  return d >= BACKUP_REMINDER_DAYS ? tfmt('backupReminderDaysMsg', { n: numFmt(d) }) : null;
 }
-document.getElementById('backupReminderCloseBtn').addEventListener('click', ()=>{
-  try{ localStorage.setItem('hisab_backup_banner_dismissed', String(Date.now())); }catch(e){}
-  hideBackupReminderBanner();
-});
+function hideBackupReminderBanner(){ if(typeof checkRecurringReminder === 'function') checkRecurringReminder(); }
+function checkBackupReminder(){ if(typeof checkRecurringReminder === 'function') checkRecurringReminder(); }
 function openBackupSection(){
   openSettings();
   const header = document.querySelector('.settings-section.acc-backup .sec.collapsible');
@@ -580,9 +601,6 @@ function openBackupSection(){
   if(header && body && !body.classList.contains('open')){ header.classList.add('open'); body.classList.add('open'); }
   setTimeout(()=>{ if(body) body.scrollIntoView({ behavior:'smooth', block:'center' }); }, 150);
 }
-document.getElementById('backupReminderGoBtn').addEventListener('click', ()=>{
-  hideBackupReminderBanner(); openBackupSection();
-});
 document.getElementById('storageFailGoBtn').addEventListener('click', openBackupSection);
 document.getElementById('corruptRestoreBtn').addEventListener('click', openBackupSection);
 document.getElementById('corruptFreshBtn').addEventListener('click', ()=>{

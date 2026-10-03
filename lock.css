@@ -186,3 +186,8 @@ html[lang="bn"] #appLockScreen .lock-heading{ font-size:20px; font-weight:600; l
 html[lang="bn"] #appLockScreen .lock-forgot-lbl{ font-size:14px; line-height:1.6; }
 html[lang="bn"] #appLockScreen .lock-alt{ font-size:15px; font-weight:600; line-height:1.7; }
 html[lang="bn"] #appLockScreen .pin-key{ font-family:'Inter','Hind Siliguri',sans-serif; }
+
+/* বাতিল বাটন — সেটিংস থেকে খোলা PIN পর্দায় (পাসওয়ার্ড বদল/লক বন্ধ/ফ্যাক্টরি রিসেট) */
+.lock-cancel{ display:block; margin:14px auto 0; padding:8px 18px; }
+.lock-cancel[hidden]{ display:none !important; }
+.lock-version:empty{ display:none; }

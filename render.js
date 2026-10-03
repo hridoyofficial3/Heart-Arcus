@@ -601,12 +601,15 @@ function renderBalances(){
   document.getElementById('grandTotal').textContent = moneyFmt(round2(totalNoSavings + sav));
   document.getElementById('grandTotalNoSavings').textContent = moneyFmt(totalNoSavings);
   const bl = document.getElementById('balLoanNet');
-  if(bl) bl.textContent = moneyFmt(loanNetOwed());
+  if(bl) bl.textContent = moneyFmt(loanTakenOwed());
   renderDailyMoneySummary();
 }
 
 function renderDailyMoneySummary(){
-  const dueReceivable = round2(dues.filter(d=> d.type==='receivable' && !d.settled).reduce((s,d)=> s+d.amount, 0));
+  const dueReceivable = round2(
+    dues.filter(d=> d.type==='receivable' && !d.settled).reduce((s,d)=> s+d.amount, 0) +
+    loans.filter(l=> l.type==='given' && !l.settled).reduce((s,l)=> s+l.amount, 0)
+  );
   const duePayable = round2(dues.filter(d=> d.type==='payable' && !d.settled).reduce((s,d)=> s+d.amount, 0));
   const elR = document.getElementById('dailySumDueReceivable');
   const elP = document.getElementById('dailySumDuePayable');
@@ -729,10 +732,9 @@ function savingsContributionByAccount(){
   return result;
 }
 
-function loanNetOwed(){
-  const payable = round2(loans.filter(l=> (l.type==='taken' || l.type==='self') && !l.settled).reduce((s,l)=> s+l.amount, 0));
-  const receivable = round2(loans.filter(l=> l.type==='given' && !l.settled).reduce((s,l)=> s+l.amount, 0));
-  return round2(payable - receivable);
+// নেওয়া লোনের মোট (দেনা) — দেওয়া লোন এখানে নয়, ওটা বকেয়া প্রাপ্যে যায়
+function loanTakenOwed(){
+  return round2(loans.filter(l=> (l.type==='taken' || l.type==='self') && !l.settled).reduce((s,l)=> s+l.amount, 0));
 }
 
 function renderLoansTab(){

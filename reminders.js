@@ -34,7 +34,10 @@ function reminderWindow(windowDays){
   return Math.floor(n);
 }
 
-/* খাঁটি ফাংশন: অ্যারে ও আজকের তারিখ আর্গুমেন্টে — টেস্টযোগ্য */
+/* দিতে হবে (pay) নাকি পাব (receive)? */
+function isPayItem(kind, type){ return kind === 'loan' ? (type === 'taken' || type === 'self') : type === 'payable'; }
+
+/* খাঁটি ফাংশন: অ্যারে ও আজকের তারিখ আর্গুমেন্টে — টেস্টযোগ্য (windowDays এখন আর ব্যবহার হয় না; নিয়ম স্থির) */
 function computeDueReminders(loanList, dueList, today, windowDays){
   const out = { overdue: [], today: [], soon: [] };
   const t = reminderDayNumber(today);
@@ -47,10 +50,14 @@ function computeDueReminders(loanList, dueList, today, windowDays){
     const amount = Number(x.amount);
     if(!isFinite(amount) || amount <= 0) return;
     const daysDiff = dn - t;
-    const item = { kind, type: x.type, id: x.id, person: x.person, amount, dueDate: x.dueDate, daysDiff };
+    const pay = isPayItem(kind, x.type);
+    const item = { kind, type: x.type, id: x.id, person: x.person, amount, dueDate: x.dueDate, daysDiff, pay };
+    /* নিয়ম: যে টাকা আমি পাব (given/receivable) → শুধু মেয়াদের দিনে;
+       যে টাকা আমি দেব (taken/self/payable) → মেয়াদের ১ দিন আগে + মেয়াদের দিনে।
+       পরিশোধ/আদায় (settled) হয়ে গেলে কিছুই নয়। মেয়াদ পেরিয়ে গেলে (এখনো বাকি) অ্যাপের বেলে দেখা যায়। */
     if(daysDiff < 0) out.overdue.push(item);
     else if(daysDiff === 0) out.today.push(item);
-    else if(daysDiff <= win) out.soon.push(item);
+    else if(pay && daysDiff === 1) out.soon.push(item);
   };
   (Array.isArray(loanList) ? loanList : []).forEach(l => push('loan', l));
   (Array.isArray(dueList) ? dueList : []).forEach(d => push('due', d));
@@ -77,10 +84,7 @@ const dueReminderModalEl = document.getElementById('dueReminderModal');
 const loansTabBadgeEl = document.getElementById('loansTabBadge');
 
 function dueReminderEnabled(){ return !(settings && settings.dueReminderOn === false); }
-function dueReminderWindowDays(){
-  const n = settings && settings.dueReminderDays;
-  return (n === 1 || n === 3 || n === 7) ? n : DUE_REMINDER_DEFAULT_DAYS;
-}
+function dueReminderWindowDays(){ return 1; }   // নিয়ম স্থির: দিতে হলে ১ দিন আগে
 const DUE_REMINDER_EMPTY = { overdue:[], today:[], soon:[] };
 /* ---- R5: সিস্টেম নোটিফিকেশন (ঐচ্ছিক, ডিফল্ট বন্ধ) ---- */
 const DUE_NOTIFY_LOG_KEY = 'hisab_due_notified';   // ডিভাইস-লোকাল (ব্যাকআপে যায় না): { date, keys:{ 'loan:id':1 } }
@@ -138,8 +142,14 @@ async function showDueNotification(title, body, tag){
   }catch(e){}
   try{ new Notification(title, opts); return true; }catch(e){ return false; }
 }
+function dueNotifyTitle(it, state){
+  const pay = isPayItem(it.kind, it.type);
+  if(state === 'overdue') return L('dueNotifTitleOverdue');
+  if(state === 'soon') return L('dueNotifTitlePaySoon');
+  return L(pay ? 'dueNotifTitlePayToday' : 'dueNotifTitleRecvToday');
+}
 function dueNotifyContent(it, state){
-  const title = L(state === 'overdue' ? 'dueNotifTitleOverdue' : state === 'today' ? 'dueNotifTitleToday' : 'dueNotifTitleSoon');
+  const title = dueNotifyTitle(it, state);
   let lockOn = false;
   try{ lockOn = (typeof isLockEnabled === 'function') && isLockEnabled(); }catch(e){}
   if(lockOn) return { title: title, body: L('dueNotifBodyPrivate') };   // পাসওয়ার্ড-লক থাকলে নাম/টাকা লক-স্ক্রিনে নয়
@@ -156,7 +166,7 @@ async function maybeNotifyDueReminders(){
     const log = readDueNotifyLog(today);
     const r = getDueReminders(today, dueReminderWindowDays());
     const all = [];
-    [['overdue', r.overdue], ['today', r.today], ['soon', r.soon]].forEach(p => p[1].forEach(it => all.push({ it: it, state: p[0] })));
+    [['today', r.today], ['soon', r.soon]].forEach(p => p[1].forEach(it => all.push({ it: it, state: p[0] })));   // মেয়াদ-পেরোনোর জন্য রোজ নোটিফিকেশন নয়
     const fresh = all.filter(x => !log.keys[x.it.kind + ':' + x.it.id]).slice(0, DUE_NOTIFY_MAX_PER_CHECK);
     for(const x of fresh){
       const c = dueNotifyContent(x.it, x.state);
@@ -201,12 +211,10 @@ async function scheduleNativeDueNotifications(){
     const mine = ((pend && pend.notifications) || []).filter(n => n.id >= 8000 && n.id < 9000).map(n => ({ id: n.id }));
     if(mine.length) await LN.cancel({ notifications: mine });
     if(!dueNotifyActive()){ try{ localStorage.removeItem(DUE_NATIVE_SLOTS_KEY); }catch(e){} return; }
-    const win = dueReminderWindowDays(), now = Date.now();
+    const now = Date.now();
     let slots = {};
     try{ slots = JSON.parse(localStorage.getItem(DUE_NATIVE_SLOTS_KEY) || '{}') || {}; }catch(e){ slots = {}; }
     const keep = {}, list = [];
-    const todayN = reminderDayNumber(todayStr());
-    const next9 = (function(){ const d = new Date(); d.setHours(9, 0, 0, 0); if(d.getTime() <= now) d.setDate(d.getDate() + 1); return d.getTime(); })();
     const add = (kind, x) => {
       if(!x || x.settled) return;
       const dn = reminderDayNumber(x.dueDate); if(dn === null) return;
@@ -215,16 +223,14 @@ async function scheduleNativeDueNotifications(){
       const at = off => new Date(p[0], p[1] - 1, p[2] + off, 9, 0, 0).getTime();
       const it = { kind: kind, type: x.type, id: x.id, person: x.person, amount: amount, dueDate: x.dueDate };
       const states = [];
-      if(win > 0) states.push(['soon', at(-win), win, 'soon' + win]);
-      states.push(['today', at(0), 0, 'today']);
-      states.push(['overdue', at(1), -1, 'overdue']);
+      if(isPayItem(kind, x.type)) states.push(['soon', at(-1), 1, 'soon1']);   // দিতে হলে ১ দিন আগে সকাল ৯টায়
+      states.push(['today', at(0), 0, 'today']);                               // মেয়াদের দিন সকাল ৯টায় (পাওয়া/দেওয়া দুটোতেই)
       states.forEach(st => {
         const key = kind + ':' + x.id + ':' + x.dueDate + ':' + st[3];
         let t = slots[key];
         if(!t){
           t = st[1];
-          // এখনই ওভারডিউ হয়ে থাকলে (সময় পেরিয়ে গেছে) পরের ৯টায় একবার মনে করাও
-          if(t <= now){ t = (st[0] === 'overdue' && dn < todayN) ? next9 : 0; }
+          if(t <= now) t = 0;   // সময় পেরিয়ে গেছে → আর শিডিউল নয় (বেলে দেখা যাবে)
         }
         if(t) keep[key] = t;
         if(t && t > now) list.push({ t: t, state: st[0], it: Object.assign({ daysDiff: st[2] }, it) });
@@ -316,20 +322,14 @@ function renderDueReminders(){
       dueReminderCardEl.classList.toggle('overdue', o > 0);
     }
   }
-  if(loansTabBadgeEl){
-    if(total === 0){ loansTabBadgeEl.classList.remove('show', 'overdue'); loansTabBadgeEl.textContent = ''; }
-    else {
-      loansTabBadgeEl.textContent = total > 99 ? numFmt(99)+'+' : numFmt(total);
-      loansTabBadgeEl.classList.add('show');
-      loansTabBadgeEl.classList.toggle('overdue', o > 0);
-    }
-  }
+  if(loansTabBadgeEl){ loansTabBadgeEl.classList.remove('show', 'overdue'); loansTabBadgeEl.textContent = ''; }   // ট্যাবে সংখ্যা-ব্যাজ নেই (বেল আইকনেই দেখায়)
   if(isDueReminderModalOpen()){   // মডাল খোলা অবস্থায় ডেটা/ভাষা/দিন বদলালে তালিকা সঙ্গে সঙ্গে ঠিক থাকে
     if(total === 0) closeDueReminders();
     else document.getElementById('dueReminderBody').innerHTML = renderDueReminderModalBody(r, win);
   }
   renderDueReminderSettings();
   queueNativeDueSchedule();
+  if(typeof checkRecurringReminder === 'function') checkRecurringReminder();   // বেল-ব্যাজ ও খোলা প্যানেল আপডেট
 }
 
 function openDueReminders(){
@@ -378,4 +378,49 @@ function dueReminderTagHtml(map, kind, id){
               : m.state === 'today'   ? L('dueRemTodayHead')
               :                         L('dueRemSoonTag') + ' · ' + rel;
   return '<span class="due-tag ' + m.state + '">' + label + '</span>';
+}
+
+
+/* ============================================================
+   বেল-প্যানেলে ঋণ/বকেয়ার মেয়াদ-রিমাইন্ডার
+   ------------------------------------------------------------
+   getNotifDueItems() → আজ + (দিতে হলে) আগামীকাল + মেয়াদ-পেরোনো (এখনো বাকি)
+   পরিশোধ/আদায় হলে renderAll() → renderDueReminders() → বেল আপনা-আপনি হালনাগাদ, আইটেম সরে যায়।
+   ============================================================ */
+function getNotifDueItems(){
+  if(!dueReminderEnabled()) return [];
+  const r = getDueReminders(todayStr(), 1);
+  return [].concat(r.today, r.soon, r.overdue);
+}
+function notifDueAction(kind, type, id){
+  closeRecurringPendingModal();
+  setTimeout(()=>{
+    if(kind === 'due') openSettleDueModal(id);
+    else if(type === 'self') openSelfLoanCardRepayModal(id);
+    else settleLoan(id);
+  }, 120);
+}
+let notifOpenKey = null;   // প্যানেলে এখন যেটার বিস্তারিত খোলা (রিরেন্ডারেও ঠিক থাকে)
+const NT_CHEVRON = '<svg class="nt-chev" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+function renderNotifDueCards(items){
+  return items.map(it=>{
+    const typeLabel = it.kind === 'loan'
+      ? (it.type === 'taken' ? L('loanTakenLabel') : it.type === 'self' ? L('loanSelfLabel') : L('loanGivenLabel'))
+      : (it.type === 'receivable' ? L('dueReceivableLabel') : L('duePayableLabel'));
+    const name = it.type === 'self' ? L('loanSelfPersonLabel') : (it.person == null ? '' : String(it.person));
+    const state = it.daysDiff < 0 ? 'overdue' : it.daysDiff === 0 ? 'today' : 'soon';
+    const stateLbl = state === 'overdue' ? L('dueRemOverdueHead') : state === 'today' ? L('dueRemTodayHead') : L('dueRemTomorrow');
+    const rel = state === 'overdue' ? dueReminderRelText(it.daysDiff) : '';
+    const act = it.pay ? L('payBtnLabel') : L('collectBtnLabel');
+    const key = 'd:'+it.kind+':'+it.id;
+    const ttl = dueNotifyTitle(it, state);
+    return '<div class="notif-item notif-due '+(it.pay ? 'pay' : 'recv')+' '+state+(notifOpenKey === key ? ' open' : '')+'" data-key="'+key+'">'+
+      '<button type="button" class="nt-head" aria-expanded="'+(notifOpenKey === key ? 'true' : 'false')+'"><span class="nt-title">'+escapeHtml(name)+' — '+ttl+'</span>'+NT_CHEVRON+'</button>'+
+      '<div class="nt-body">'+
+        '<div class="nd-top"><span class="nd-name">'+escapeHtml(name)+'</span><span class="nd-amt">'+moneyFmt(it.amount)+'</span></div>'+
+        '<div class="nd-meta"><span class="nd-type">'+typeLabel+'</span><span class="nd-state '+state+'">'+stateLbl+(rel ? ' · '+rel : '')+'</span><span>'+escapeHtml(it.dueDate)+'</span></div>'+
+        '<div class="nd-actions"><button class="ri-pay-btn nd-btn" onclick="notifDueAction(\''+it.kind+'\',\''+it.type+'\','+Number(it.id)+')">'+act+'</button></div>'+
+      '</div>'+
+    '</div>';
+  }).join('');
 }
