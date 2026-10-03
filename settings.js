@@ -493,7 +493,7 @@ document.getElementById('resetAllConfirmOkBtn').addEventListener('click', ()=>{
   openSimpleConfirm(L('resetAllConfirmMsg'), ()=>{
     try{
       ['hisab_entries','hisab_notes','hisab_plans','hisab_loans','hisab_dues','hisab_settings',
-       'hisab_recurring','hisab_lang','hisab_last_backup','hisab_backup_banner_dismissed',
+       'hisab_recurring','hisab_lang','hisab_last_backup','hisab_backup_banner_dismissed','hisab_backup_notify','hisab_backup_notify_base','hisab_due_native_init','hisab_due_native_slots',
        'hisab_lock_enabled','hisab_lock_pw_hash','hisab_lock_pw_salt','hisab_lock_sq',
        'hisab_lock_sq_hash','hisab_lock_sq_salt','hisab_lock_webauthn_id','hisab_lock_last_activity',
        'hisab_lock_attempts','hisab_lock_cooldown_until','hisab_lock_forgot_attempts','hisab_lock_forgot_cooldown_until']

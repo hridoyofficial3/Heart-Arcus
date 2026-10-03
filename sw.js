@@ -1,9 +1,9 @@
-const CACHE = 'hisab-khata-v92';
+const CACHE = 'hisab-khata-v94';
 const FILES = [
   './', './index.html', './style.css', './lock.css', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png',
   './i18n.js', './i18n-lock.js', './settings.js', './privacy-lock.js', './backup.js', './state.js', './recurring.js',
-  './render.js', './entries.js', './notes-plans.js', './loans.js', './reminders.js', './init.js', './ui-fx.js', './ui-select.js', './ui-notes.js', './calc.js'
+  './render.js', './entries.js', './notes-plans.js', './loans.js', './reminders.js', './backup-notify.js', './app-version.js', './update-check.js', './init.js', './ui-fx.js', './ui-select.js', './ui-notes.js', './calc.js'
 ];
 
 self.addEventListener('install', e => {

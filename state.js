@@ -536,9 +536,11 @@ function getLastBackupTime(){ try{ const v = localStorage.getItem('hisab_last_ba
 function markBackupDone(){
   try{ localStorage.setItem('hisab_last_backup', String(Date.now())); }catch(e){}
   renderBackupStatus(); hideBackupReminderBanner();
+  if(typeof scheduleBackupNotification === 'function') scheduleBackupNotification();
 }
 function daysSince(ts){ return Math.max(0, Math.floor((Date.now() - ts) / 86400000)); }
 function renderBackupStatus(){
+  if(typeof renderBackupNotifyBtn === 'function') renderBackupNotifyBtn();
   const el = document.getElementById('lastBackupStatus');
   if(!el) return;
   const last = getLastBackupTime();

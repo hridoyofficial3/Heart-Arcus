@@ -1,0 +1,8 @@
+{
+  "appId": "com.arcus.app",
+  "appName": "Arcus",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  }
+}

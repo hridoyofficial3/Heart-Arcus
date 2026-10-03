@@ -86,8 +86,33 @@ const DUE_REMINDER_EMPTY = { overdue:[], today:[], soon:[] };
 const DUE_NOTIFY_LOG_KEY = 'hisab_due_notified';   // ডিভাইস-লোকাল (ব্যাকআপে যায় না): { date, keys:{ 'loan:id':1 } }
 const DUE_NOTIFY_MAX_PER_CHECK = 5;
 let dueNotifyBusy = false;
-function dueNotifySupported(){ return typeof Notification !== 'undefined' && 'serviceWorker' in navigator; }
-function dueNotifyPermission(){ return dueNotifySupported() ? Notification.permission : 'unsupported'; }
+/* ---- APK (Capacitor) এ নেটিভ নোটিফিকেশন; ব্রাউজারে আগের পদ্ধতি ---- */
+let dueNativePerm = 'default';
+function dueNativeLN(){ return (typeof bnPlugin === 'function') ? bnPlugin() : null; }
+function dueNotifySupported(){ return !!dueNativeLN() || (typeof Notification !== 'undefined' && 'serviceWorker' in navigator); }
+function dueNotifyPermission(){
+  if(dueNativeLN()) return dueNativePerm;
+  return dueNotifySupported() ? Notification.permission : 'unsupported';
+}
+async function refreshDueNativePerm(){
+  const LN = dueNativeLN(); if(!LN) return;
+  try{
+    const p = await LN.checkPermissions();
+    dueNativePerm = p.display === 'granted' ? 'granted' : (p.display === 'denied' ? 'denied' : 'default');
+  }catch(e){}
+  renderDueReminderSettings();
+  queueNativeDueSchedule();
+}
+async function dueNativeInit(){
+  if(!dueNativeLN()) return;
+  await refreshDueNativePerm();
+  try{
+    if(dueNativePerm === 'granted' && !localStorage.getItem('hisab_due_native_init')){
+      localStorage.setItem('hisab_due_native_init', '1');
+      if(!settings.dueNotifyOn){ settings.dueNotifyOn = true; saveSettings(); renderDueReminderSettings(); queueNativeDueSchedule(); }
+    }
+  }catch(e){}
+}
 function dueNotifyActive(){ return dueReminderEnabled() && !!(settings && settings.dueNotifyOn) && dueNotifyPermission() === 'granted'; }
 function readDueNotifyLog(today){
   try{
@@ -98,6 +123,14 @@ function readDueNotifyLog(today){
 }
 function saveDueNotifyLog(log){ try{ localStorage.setItem(DUE_NOTIFY_LOG_KEY, JSON.stringify(log)); }catch(e){} }
 async function showDueNotification(title, body, tag){
+  const LN0 = dueNativeLN();
+  if(LN0){
+    try{
+      let h = 0; for(let i = 0; i < tag.length; i++){ h = (h * 31 + tag.charCodeAt(i)) % 800000; }
+      await LN0.schedule({ notifications: [{ id: 100000 + h, title: title, body: body, schedule: { at: new Date(Date.now() + 1500), allowWhileIdle: true }, extra: { action: 'due' } }] });
+      return true;
+    }catch(e){ return false; }
+  }
   const opts = { body: body, tag: tag, icon: './icon-192.png', badge: './icon-192.png', data: { url: './' } };
   try{
     const reg = await navigator.serviceWorker.getRegistration();
@@ -115,6 +148,7 @@ function dueNotifyContent(it, state){
   return { title: title, body: [name, moneyFmt(it.amount), rel].filter(Boolean).join(' · ') };
 }
 async function maybeNotifyDueReminders(){
+  if(dueNativeLN()) return;   // APK-তে আগে থেকে শিডিউল করা নোটিফিকেশনই কাজ করে
   if(dueNotifyBusy || !dueNotifyActive()) return;
   dueNotifyBusy = true;
   try{
@@ -132,7 +166,14 @@ async function maybeNotifyDueReminders(){
   }finally{ dueNotifyBusy = false; }
 }
 async function onDueNotifyToggle(checked){
-  if(!checked){ settings.dueNotifyOn = false; saveSettings(); renderDueReminderSettings(); return; }
+  if(!checked){ settings.dueNotifyOn = false; saveSettings(); renderDueReminderSettings(); queueNativeDueSchedule(); return; }
+  if(dueNativeLN()){
+    const ok = (typeof bnEnsurePermission === 'function') ? await bnEnsurePermission(true) : false;
+    await refreshDueNativePerm();
+    if(!ok){ settings.dueNotifyOn = false; saveSettings(); renderDueReminderSettings(); toast(L('dueNotifDeniedMsg')); return; }
+    settings.dueNotifyOn = true; saveSettings(); renderDueReminderSettings(); queueNativeDueSchedule();
+    return;
+  }
   let perm = dueNotifyPermission();
   if(perm === 'default'){ try{ perm = await Notification.requestPermission(); }catch(e){ perm = 'denied'; } }
   if(perm !== 'granted'){
@@ -143,6 +184,65 @@ async function onDueNotifyToggle(checked){
   settings.dueNotifyOn = true; saveSettings(); renderDueReminderSettings();
   maybeNotifyDueReminders();
 }
+/* ---- APK: মেয়াদের দিন সকাল ৯টায় শিডিউল (অ্যাপ বন্ধ থাকলেও আসে) ----
+   প্রতিটা (আইটেম+অবস্থা) একবারই; সময় 'hisab_due_native_slots'-এ স্থির রাখা হয় যাতে বারবার রিশিডিউলে দেরি না হয় বা ডাবল না আসে */
+const DUE_NATIVE_SLOTS_KEY = 'hisab_due_native_slots';
+let dueSchedTimer = null, dueSchedBusy = false;
+function queueNativeDueSchedule(){
+  if(!dueNativeLN()) return;
+  clearTimeout(dueSchedTimer);
+  dueSchedTimer = setTimeout(scheduleNativeDueNotifications, 1500);
+}
+async function scheduleNativeDueNotifications(){
+  const LN = dueNativeLN(); if(!LN || dueSchedBusy) return;
+  dueSchedBusy = true;
+  try{
+    const pend = await LN.getPending();
+    const mine = ((pend && pend.notifications) || []).filter(n => n.id >= 8000 && n.id < 9000).map(n => ({ id: n.id }));
+    if(mine.length) await LN.cancel({ notifications: mine });
+    if(!dueNotifyActive()){ try{ localStorage.removeItem(DUE_NATIVE_SLOTS_KEY); }catch(e){} return; }
+    const win = dueReminderWindowDays(), now = Date.now();
+    let slots = {};
+    try{ slots = JSON.parse(localStorage.getItem(DUE_NATIVE_SLOTS_KEY) || '{}') || {}; }catch(e){ slots = {}; }
+    const keep = {}, list = [];
+    const todayN = reminderDayNumber(todayStr());
+    const next9 = (function(){ const d = new Date(); d.setHours(9, 0, 0, 0); if(d.getTime() <= now) d.setDate(d.getDate() + 1); return d.getTime(); })();
+    const add = (kind, x) => {
+      if(!x || x.settled) return;
+      const dn = reminderDayNumber(x.dueDate); if(dn === null) return;
+      const amount = Number(x.amount); if(!isFinite(amount) || amount <= 0) return;
+      const p = x.dueDate.split('-').map(Number);
+      const at = off => new Date(p[0], p[1] - 1, p[2] + off, 9, 0, 0).getTime();
+      const it = { kind: kind, type: x.type, id: x.id, person: x.person, amount: amount, dueDate: x.dueDate };
+      const states = [];
+      if(win > 0) states.push(['soon', at(-win), win, 'soon' + win]);
+      states.push(['today', at(0), 0, 'today']);
+      states.push(['overdue', at(1), -1, 'overdue']);
+      states.forEach(st => {
+        const key = kind + ':' + x.id + ':' + x.dueDate + ':' + st[3];
+        let t = slots[key];
+        if(!t){
+          t = st[1];
+          // এখনই ওভারডিউ হয়ে থাকলে (সময় পেরিয়ে গেছে) পরের ৯টায় একবার মনে করাও
+          if(t <= now){ t = (st[0] === 'overdue' && dn < todayN) ? next9 : 0; }
+        }
+        if(t) keep[key] = t;
+        if(t && t > now) list.push({ t: t, state: st[0], it: Object.assign({ daysDiff: st[2] }, it) });
+      });
+    };
+    (Array.isArray(loans) ? loans : []).forEach(l => add('loan', l));
+    (Array.isArray(dues) ? dues : []).forEach(d => add('due', d));
+    list.sort((a, b) => a.t - b.t);
+    const batch = list.slice(0, 60).map((e, i) => {
+      const c = dueNotifyContent(e.it, e.state);
+      return { id: 8000 + i, title: c.title, body: c.body, schedule: { at: new Date(e.t), allowWhileIdle: true }, extra: { action: 'due' } };
+    });
+    if(batch.length) await LN.schedule({ notifications: batch });
+    try{ localStorage.setItem(DUE_NATIVE_SLOTS_KEY, JSON.stringify(keep)); }catch(e){}
+  }catch(e){ console.warn('due native schedule failed', e); }
+  finally{ dueSchedBusy = false; }
+}
+
 function renderDueReminderSettings(){   // সেটিংস-সেকশন: সুইচ + ১/৩/৭ বাটন (ভাষা বদলালেও নতুন লেবেল)
   const sw = document.getElementById('dueReminderToggle');
   if(!sw) return;
@@ -229,6 +329,7 @@ function renderDueReminders(){
     else document.getElementById('dueReminderBody').innerHTML = renderDueReminderModalBody(r, win);
   }
   renderDueReminderSettings();
+  queueNativeDueSchedule();
 }
 
 function openDueReminders(){
