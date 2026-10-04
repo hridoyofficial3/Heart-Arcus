@@ -159,6 +159,17 @@ jobs:
         working-directory: android
         run: ./gradlew assembleDebug
 
+      - name: Print signing SHA-1 of the built APK
+        run: |
+          APKSIGNER=$(ls -d $ANDROID_HOME/build-tools/*/ | sort -V | tail -1)apksigner
+          echo "== APK signing certificate =="
+          $APKSIGNER verify --print-certs android/app/build/outputs/apk/debug/app-debug.apk | grep -i "SHA-1" | tee sha.txt
+          echo "== debug.keystore SHA-1 (expected) =="
+          keytool -list -v -keystore ~/.android/debug.keystore -storepass android | grep "SHA1" | tee -a sha.txt
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat sha.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
