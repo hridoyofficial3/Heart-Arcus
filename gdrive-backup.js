@@ -178,7 +178,8 @@
       await loginInteractive();
     }catch(e){
       console.warn('gdrive login failed', e);
-      say(T('Google লগইন হয়নি', 'Google sign-in failed'), 3500); return;
+      var _d=''; try{ _d=' [' + ((e&&(e.code||e.errorCode))||'') + ' ' + ((e&&e.message)||String(e)) + ']'; }catch(_e){}
+      say(T('Google লগইন হয়নি', 'Google sign-in failed') + _d, 15000); return;
     }
     try{
       var f = await findFile();
